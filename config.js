@@ -64,6 +64,9 @@ const config = {
   
   // 日誌等級: DEBUG, INFO, WARNING, ERROR
   LOG_LEVEL: getString('LOG_LEVEL', 'info'),
+  
+  // 自動補齊模式：預設檢查當日往前 N 天的紀錄
+  DEFAULT_FILL_DAYS: getInt('DEFAULT_FILL_DAYS', 7),
 };
 
 module.exports = config;
