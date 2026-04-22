@@ -1,0 +1,30 @@
+{
+  "name": "taiwan-stock-daily-collector",
+  "version": "2.0.0",
+  "description": "台灣股市每日自動抓取 - Node.js 版本 (Taiwan Stock Daily Collector)",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "test": "node config_loader.js",
+    "lint": "npx eslint ."
+  },
+  "keywords": [
+    "taiwan",
+    "stock",
+    "collector",
+    "google-sheets",
+    "yahoo-finance",
+    "automated"
+  ],
+  "author": "AngeloEyez",
+  "license": "MIT",
+  "dependencies": {
+    "axios": "^1.7.0",
+    "dotenv": "^16.4.0",
+    "googleapis": "^144.0.0",
+    "winston": "^3.14.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
