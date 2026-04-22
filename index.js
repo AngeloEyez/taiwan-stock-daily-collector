@@ -20,11 +20,13 @@
  *   Section 4 (資料處理): 合併資料並計算漲跌/漲跌%
  *   Section 5 (Google Sheets 寫入): 寫資料到試算表
  *   Section 6 (主程式): 串起所有功能
+ * 
+ * ★ 這個版本使用 Node.js 18+ 內建的 fetch API，不用安裝 axios!
  */
 
 const fs = require('fs');
 const path = require('path');
-const axios = require('axios');
+// Node.js 18+ 內建的 fetch，不需要 npm install axios!
 const { google } = require('googleapis');
 const winston = require('winston');
 
@@ -41,7 +43,7 @@ const logger = winston.createLogger({
 });
 
 // ==============================================
-// Section 2: Yahoo Finance API
+// Section 2: Yahoo Finance API (使用原生 fetch)
 // ==============================================
 
 /**
@@ -52,6 +54,43 @@ const TWSE_HEADERS = {
 };
 
 /**
+ * HTTP 請求函數 - 使用 Node.js 18+ 內建的 fetch
+ * 
+ * 參數:
+ *   url: 要請求的 URL
+ *   timeout: 逾時時間（毫秒）
+ *   headers: HTTP 標頭
+ * 
+ * 回傳:
+ *   Promise<Object>: HTTP 回應物件 (response object)
+ */
+async function fetchJson(url, timeout = 15000, headers = TWSE_HEADERS) {
+  // fetch 的 AbortController 用來設定 timeout
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeout);
+  
+  try {
+    const response = await fetch(url, {
+      headers: headers,
+      signal: controller.signal,
+    });
+    
+    clearTimeout(timeoutId);
+    
+    // 檢查 response 狀態（例如 404, 500 等）
+    if (!response.ok) {
+      throw new Error(`HTTP error: ${response.status}`);
+    }
+    
+    // 將 text 轉成 JSON
+    return await response.json();
+  } catch (error) {
+    clearTimeout(timeoutId);
+    throw error; // 拋給呼叫端處理
+  }
+}
+
+/**
  * 向 Yahoo Finance 取得單一 ticker 的資料
  * 
  * 參數:
@@ -59,29 +98,13 @@ const TWSE_HEADERS = {
  * 
  * 回傳:
  *   Promise<Object>: 包含價格、開盤、高低、成交量等
- *     物件 key 說明:
- *       - symbol: ticker 名稱
- *       - price: 目前價格
- *       - prev_close: 前一日的收盤價
- *       - open: 今日開盤價
- *       - close: 今日收盤價
- *       - high: 今日最高價
- *       - low: 今日最低價
- *       - volume: 成交量
- *       - currency: 幣別 (TWD/USD 等)
- *       - timestamp: 資料的時間戳記
- *       - error: 錯誤訊息 (如果抓取失敗)
  */
 async function yahooGet(ticker) {
   try {
     const url = `https://query2.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?interval=1d`;
     
-    const resp = await axios.get(url, {
-      headers: TWSE_HEADERS,
-      timeout: config.YAHOO_TIMEOUT * 1000,
-    });
-    
-    const data = resp.data;
+    // 使用 fetch 取代 axios
+    const data = await fetchJson(url);
     const result = data.chart?.result;
     
     if (!result || result.length === 0) {
@@ -131,11 +154,9 @@ async function getFxRate() {
   
   for (const url of urls) {
     try {
-      const resp = await axios.get(url, { timeout: config.EXCHANGE_TIMEOUT * 1000 });
+      // fetch 取代 axios.get()
+      const data = await fetchJson(url, config.EXCHANGE_TIMEOUT * 1000);
       
-      if (resp.status !== 200) continue;
-      
-      const data = resp.data;
       const twdRate = data?.usd?.twd;
       
       if (twdRate !== undefined && twdRate !== null) {
@@ -364,7 +385,7 @@ async function appendToSheets(rowData) {
 
 async function main() {
   logger.info('='.repeat(50));
-  logger.info('台灣股市每日資料自動抓取程式啟動 ✨');
+  logger.info('台灣股市每日資料自動抓取程式啟動 ✨ (no axios!)');
   logger.info('='.repeat(50));
   
   // 取得今天日期
@@ -372,7 +393,7 @@ async function main() {
   const dateStr = `${today.getFullYear()}/${String(today.getMonth() + 1).padStart(2, '0')}/${String(today.getDate()).padStart(2, '0')}`;
   logger.info(`目標日期: ${dateStr}\n`);
   
-  // ===== Step 1: 抓取 Yahoo Finance 資料 =====
+  // ===== Step 1: 抓取 Yahoo Finance 資料 ====
   logger.info('--- 抓取 Yahoo Finance 資料 ---');
   
   // 1-A: 台股加權指數
@@ -399,7 +420,7 @@ async function main() {
   logger.info(`  → USD/TWD: ${fx || 'N/A'}`);
   await waitRandom();
   
-  // ===== 檢查是否有抓取到有效資料 =====
+  // ===== 檢查是否有抓取到有效資料 ====
   if (!market || market.error) {
     logger.error(`台股指數抓取失敗: ${market.error || '未知錯誤'}`);
     return;
@@ -419,14 +440,14 @@ async function main() {
   
   logger.info('\n✅ 所有抓取完成!\n');
   
-  // ===== Step 2: 計算漲跌 =====
+  // ===== Step 2: 計算漲跌 ====
   const taiexChange = calculateChange(market.price, market.prev_close);
   const taiexPct = calculatePct(market.price, market.prev_close);
   
   const tsmcChange = calculateChange(tsmc.price, tsmc.prev_close);
   const tsmcPct = calculatePct(tsmc.price, tsmc.prev_close);
   
-  // ===== Step 3: 組合 15 列資料 =====
+  // ===== Step 3: 組合 15 列資料 ====
   const combinedRow = [
     dateStr,                    // 1. 日期
     'N/A',                      // 2. 星期 (稍後補上)
@@ -448,10 +469,10 @@ async function main() {
   // 修正星期 (放在最後一列)
   combinedRow[1] = getWeekday(dateStr);
   
-  // ===== Step 4: 寫入 Google Sheets =====
+  // ===== Step 4: 寫入 Google Sheets ====
   const writeResult = await appendToSheets(combinedRow);
   
-  // ===== Step 5: 回報結果 =====
+  // ===== Step 5: 回報結果 ====
   if (writeResult) {
     logger.info('\n✅ 全部工作完成!\n');
     
