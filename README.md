@@ -44,10 +44,11 @@
 
 ```bash
 # 抓取今日資料 (預設)
-node index.js
+npm run collect
+node collect.js
 
 # 抓取特定日期 (格式: YYYY/MM/DD)
-node index.js --mode single --date 2026/04/14
+node collect.js --date 2026/04/14
 ```
 
 ### 2. 批次抓取
@@ -55,7 +56,7 @@ node index.js --mode single --date 2026/04/14
 抓取指定日期區間內的所有交易日資料。
 
 ```bash
-node index.js --mode batch --start 2026/04/01 --end 2026/04/22
+node collect.js --start 2026/04/01 --end 2026/04/22
 ```
 
 ### 3. 自動補齊模式
@@ -63,8 +64,9 @@ node index.js --mode batch --start 2026/04/01 --end 2026/04/22
 檢查試算表中現有的日期紀錄，自動補齊遺漏的交易日資料。
 
 ```bash
-node index.js --mode fill
+node collect.js --fill
 ```
+
 
 ---
 
@@ -116,7 +118,7 @@ crontab -e
 
 ```bash
 # 每天下午 18:00 執行 (收盤後)
-0 18 * * 0-6 /usr/bin/node /path/to/taiwan-stock-daily-collector/index.js >> /var/log/stock_collector.log 2>&1
+0 18 * * 0-6 /usr/bin/node /path/to/taiwan-stock-daily-collector/collect.js >> /var/log/stock_collector.log 2>&1
 ```
 
 ### 方式二: Hermes Agent cron job
@@ -130,35 +132,43 @@ create 台灣股市每日抓取
 ## 🏗️ 架構圖
 
 ```
-┌──────────────────────────────────────────┐
-│  index.js (主程式)                         │
-│                                            │
-│  ├── Yahoo Finance API (^TWII, 2330.TW, TSM)  │
-│  ├── Exchange API (USD/TWD)             │
-│  ├── 資料計算 (漲跌、漲跌%)             │
-│  └── Google Sheets API (寫入)          │
-└──────────────────────────────────────────┘
+collect.js (CLI 入口)
+  │
+  └── src/main.js (主程式流程)
+        ├── src/fetchYahoo.js    → Yahoo Finance API (^TWII, 2330.TW, TSM)
+        ├── src/fetchExchange.js → Exchange API (USD/TWD)
+        ├── src/googleSheets.js  → Google Sheets API (讀寫、排序)
+        ├── src/utils.js         → 日期工具、計算函式、fetchJson
+        └── src/logger.js        → Winston logger
               │
-              ▼
-┌──────────────────────────────────────────┐
-│  .env (環境變數設定)                     │
-│  (不進入版本控制，避免洩漏機密)         │
-└──────────────────────────────────────────┘
+              ├── config.js      → 環境變數 (.env)
+              └── .env           → 機密設定 (不進入版本控制)
 ```
 
 ## 📁 專案結構
 
 ```
 taiwan-stock-daily-collector/
-├── index.js          # 主程式 (entry point)
-├── config.js         # 環境變數配置載入器
-├── package.json      # npm 套件描述檔
-├── README.md         # 本檔案
-├── .env.example      # 環境變數範本
-├── .env              # 實際環境變數 (不進入版本控制)
-├── .gitignore        # Git 忽略檔
-└── node_modules/     # 安裝的依賴套件 (不進入版本控制)
+├── collect.js            # ★ CLI 入口點
+├── config.js             # 環境變數載入器
+├── index.js              # 相容性保留檔 (已廢棄)
+├── src/
+│   ├── logger.js         # Winston logger 設定
+│   ├── utils.js          # 共用工具函式 (日期、計算、fetch)
+│   ├── fetchYahoo.js     # Yahoo Finance API 抓取
+│   ├── fetchExchange.js  # 匯率 API 抓取
+│   ├── googleSheets.js   # Google Sheets API 讀寫
+│   └── main.js           # 主程式 (CLI 解析、三種執行模式)
+├── docs/
+│   ├── STRUCTURE.md      # 模組架構說明文件
+│   └── API.md            # 外部 API 端點說明
+├── package.json
+├── .env.example
+├── .env                  # 實際環境變數 (不進入版本控制)
+├── .gitignore
+└── README.md
 ```
+
 
 ## ✨ Node.js 版本特色 (vs Python)
 

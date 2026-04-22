@@ -32,25 +32,17 @@
 └─────┬──────────────────┘
       │ config 配置
 ┌─────▼──────────────────┐
-│  index.js              │
+│  collect.js (CLI入口)  │
 │  ┌──────────────────┐  │
-│  │ Section 2: Yahoo  │  │
-│  │   Finance API    │  │
-│  │   - ^TWII        │  │
-│  │   - 2330.TW      │  │
-│  │   - TSM (ADR)    │  │
-│  └──────────────────┘  │
-│  ┌──────────────────┐  │
-│  │ Section 3: Exchange│ │
-│  │   API (USD/TWD)   │  │
-│  └──────────────────┘  │
-│  ┌──────────────────┐  │
-│  │ Section 4: 資料   │  │
-│  │   計算            │  │
-│  └──────────────────┘  │
-│  ┌──────────────────┐  │
-│  │ Section 5: Google  │ │
-│  │   Sheets API      │  │
+│  │ src/main.js       │  │
+│  │   - 流程控制      │  │
+│  └────────┬─────────┘  │
+│  ┌────────▼─────────┐  │
+│  │ src/fetchYahoo.js │  │
+│  │ src/fetchExchange.│  │
+│  │ src/googleSheets. │  │
+│  │ src/utils.js      │  │
+│  │ src/logger.js     │  │
 │  └──────────────────┘  │
 └─────────────────────────┘
 ```
@@ -87,12 +79,20 @@
 
 ```
 taiwan-stock-daily-collector/
-├── index.js          # 主程式 (entry point)
+├── collect.js        # 主程式 (CLI 入口)
+├── src/              # 功能模組
+│   ├── main.js
+│   ├── fetchYahoo.js
+│   ├── fetchExchange.js
+│   ├── googleSheets.js
+│   ├── utils.js
+│   └── logger.js
 ├── config.js         # 環境變數配置載入器
 ├── package.json      # npm 套件描述檔
 ├── README.md         # 專案說明文件
 ├── docs/
-│   └── API.md        # API 端點說明文件
+│   ├── API.md        # API 端點說明文件
+│   └── STRUCTURE.md  # 架構說明
 ├── .env.example      # 環境變數範本
 ├── .env              # 實際環境變數 (不進入版本控制)
 └── .gitignore        # Git 忽略檔
@@ -120,7 +120,7 @@ LOG_LEVEL=info
 如果要新增某個欄位 (例如成交金額):
 
 1. 新增 API 抓取函數 (如 `fetchVolume()`)
-2. 在主程式中呼叫並取得資料
+2. 在 `src/main.js` 中呼叫並取得資料
 3. 將結果放入 `combinedRow` 對應位置 (目前 Col F = 索引 5)
 4. 更新 README.md 與本文件
 
@@ -129,5 +129,5 @@ LOG_LEVEL=info
 ```bash
 npm install          # 安裝依賴
 node config.js       # 測試配置
-node index.js        # 執行主程式
+node collect.js      # 執行主程式
 ```
