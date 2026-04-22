@@ -34,79 +34,72 @@
 | N | ADR (USD) | ✅ | Yahoo Finance (TSM) |
 | O | 匯率 | ✅ | Exchange API (fawazahmed0) |
 
-## 📦 安裝
+## 🚀 使用方式
 
-### 1. 安裝 Node.js
+本程式支援多種執行模式，可透過命令行參數進行操作：
 
-確保已安裝 Node.js >= 18.0.0
+### 1. 單日抓取 (預設)
+
+抓取指定日期或今日（台北時間）的資料。
 
 ```bash
-node --version  # 確認版本
+# 抓取今日資料 (預設)
+node index.js
+
+# 抓取特定日期 (格式: YYYY/MM/DD)
+node index.js --mode single --date 2026/04/14
 ```
 
-### 2. 安裝專案依賴
+### 2. 批次抓取
+
+抓取指定日期區間內的所有交易日資料。
 
 ```bash
+node index.js --mode batch --start 2026/04/01 --end 2026/04/22
+```
+
+### 3. 自動補齊模式
+
+檢查試算表中現有的日期紀錄，自動補齊遺漏的交易日資料。
+
+```bash
+node index.js --mode fill
+```
+
+---
+
+## 📦 安裝與設定
+
+### 1. 安裝環境與依賴
+
+確保已安裝 **Node.js >= 18.0.0**。
+
+```bash
+# 安裝套件
 npm install
 ```
 
-### 3. Google OAuth 設定
+### 2. Google Service Account 設定
 
-如果你想將此程式用於自己的試算表:
+本專案採用 **Service Account (服務帳戶)** 驗證，適合伺服器自動化執行：
 
-1. 前往 **[Google Cloud Console](https://console.cloud.google.com/)**
-2. 建立新的 OAuth 2.0 憑證 (Desktop app 類型)
-3. 下載 `client_secret.json`
-4. 執行 OAuth 授權流程生成 `token.json`
+1. 前往 **[Google Cloud Console](https://console.cloud.google.com/)**。
+2. 建立新的 **Service Account** 並下載其 **JSON 金鑰檔案**。
+3. 將該 JSON 檔案命名為 `service_account.json` 並放入專案根目錄。
+4. 將您的 Google Sheet **共用 (Share)** 給該 Service Account 的電子郵件地址，並授予「編輯者」權限。
 
-範例授權流程:
-
-```javascript
-// 在 Node.js 中執行一次:
-const { google } = require('googleapis');
-const { OAuth2 } = google.auth;
-const fs = require('fs');
-
-const client = new OAuth2(
-  YOUR_CLIENT_ID,
-  YOUR_CLIENT_SECRET,
-  'urn:ietf:wg:auth:2.0:oob'
-);
-
-const authUrl = client.generateAuthUrl({
-  access_type: 'offline',
-  scope: ['https://www.googleapis.com/auth/spreadsheets']
-});
-
-console.log('請前往以下 URL 授權:', authUrl);
-// 複製授權碼回來
-const code = readline.question('請輸入授權碼: ');
-
-const token = await client.getToken(code);
-fs.writeFileSync('token.json', JSON.stringify(token.tokens));
-console.log('token.json 已生成!');
-```
-
-### 4. 設定 .env 環境變數
+### 3. 設定環境變數
 
 ```bash
 cp .env.example .env
 ```
 
-編輯 `.env`:
+編輯 `.env` 檔案，確保包含以下內容：
 
-```bash
+```env
 SPREADSHEET_ID=你的試算表ID
-TOKEN_PATH=/path/to/google_token.json
-CLIENT_SECRET_PATH=/path/to/google_client_secret.json
-```
-
-### 5. 測試執行
-
-```bash
-node index.js
-# 或
-npm start
+GOOGLE_SERVICE_ACCOUNT_FILE=service_account.json
+LOG_LEVEL=info
 ```
 
 ## 🔄 Cron 設定
@@ -172,9 +165,9 @@ taiwan-stock-daily-collector/
 | 項目 | Python 版 | Node.js 版 |
 |------|-----------|------------|
 | 執行時 | Python 3.10+ | Node.js 18+ |
-| HTTP 請求 | requests | axios |
+| HTTP 請求 | requests | fetch (原生) / yahoo-finance2 |
 | 日誌記錄 | logging | winston |
-| OAuth | google-auth-oauthlib | googleapis (原生) |
+| 認證模式 | OAuth 2.0 | Service Account |
 | 配置管理 | 自訂 config_loader | dotenv |
 | 程式風格 | 多個 functions | async/await |
 

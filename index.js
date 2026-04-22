@@ -87,7 +87,7 @@ function parseArgs() {
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
-    
+
     if (arg === '--date' && i + 1 < args.length) {
       result.mode = 'single';
       result.date = args[i + 1];
@@ -107,7 +107,7 @@ function parseArgs() {
       result.mode = 'fill';
     }
   }
-  
+
   // 如果使用者沒有輸入任何參數，預設為单日模式
   if (result.date === null && result.startDate === null && result.endDate === null) {
     result.mode = 'single';
@@ -134,19 +134,19 @@ function isValidDate(dateStr) {
   if (!dateStr || typeof dateStr !== 'string') return false;
   const regex = /^\d{4}\/\d{2}\/\d{2}$/;
   if (!regex.test(dateStr)) return false;
-  
+
   const [yearStr, monthStr, dayStr] = dateStr.split('/');
   const year = parseInt(yearStr, 10);
   const month = parseInt(monthStr, 10);
   const day = parseInt(dayStr, 10);
-  
+
   // 月份必須在 1-12 之間
   if (month < 1 || month > 12) return false;
   // 日期必須在 1-31 之間
   if (day < 1 || day > 31) return false;
   // 年份必須是正數
   if (year < 1900 || year > 2100) return false;
-  
+
   return true;
 }
 
@@ -162,16 +162,16 @@ function isValidDate(dateStr) {
 function getTodayStr() {
   // 建立目前時間物件
   const now = new Date();
-  
+
   // 取得 UTC 時間的零點 (台北時間)
   // 方法：先取得 UTC 時間，加上 8 小時，再取零點
   const utcMs = now.getTime() + (now.getTimezoneOffset() * 60000);
   const taipeiTime = new Date(utcMs + (8 * 3600000));
-  
+
   const year = taipeiTime.getUTCFullYear();
   const month = String(taipeiTime.getUTCMonth() + 1).padStart(2, '0');
   const day = String(taipeiTime.getUTCDate()).padStart(2, '0');
-  
+
   return `${year}/${month}/${day}`;
 }
 
@@ -197,11 +197,11 @@ function dateToStr(date) {
   // 先轉為 UTC+8 的 Date 物件
   const utcMs = date.getTime() + (date.getTimezoneOffset() * 60000);
   const taipeiTime = new Date(utcMs + (8 * 3600000));
-  
+
   const year = taipeiTime.getUTCFullYear();
   const month = String(taipeiTime.getUTCMonth() + 1).padStart(2, '0');
   const day = String(taipeiTime.getUTCDate()).padStart(2, '0');
-  
+
   return `${year}/${month}/${day}`;
 }
 
@@ -226,7 +226,7 @@ function isWeekend(date) {
  */
 function isTradingDay(dateStr) {
   const date = dateStrToDate(dateStr);
-  
+
   // 僅檢查是否為週末
   return !isWeekend(date);
 }
@@ -242,19 +242,19 @@ function getTradingDaysBetween(startDate, endDate) {
   const tradingDays = [];
   let currentDate = dateStrToDate(startDate);
   const end = dateStrToDate(endDate);
-  
+
   // 從起始日到結束日逐一檢查
   while (currentDate <= end) {
     const dateStr = dateToStr(currentDate);
-    
+
     if (isTradingDay(dateStr)) {
       tradingDays.push(dateStr);
     }
-    
+
     // 移動到下一天
     currentDate = new Date(currentDate.getTime() + 86400000); // 86400000 ms = 1 day
   }
-  
+
   return tradingDays;
 }
 
@@ -284,20 +284,20 @@ async function fetchJson(url, timeout = 15000, headers = TWSE_HEADERS) {
   // fetch 的 AbortController 用來設定 timeout
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeout);
-  
+
   try {
     const response = await fetch(url, {
       headers: headers,
       signal: controller.signal,
     });
-    
+
     clearTimeout(timeoutId);
-    
+
     // 檢查 response 狀態（例如 404, 500 等）
     if (!response.ok) {
       throw new Error(`HTTP error: ${response.status}`);
     }
-    
+
     // 將 text 轉成 JSON
     return await response.json();
   } catch (error) {
@@ -336,16 +336,16 @@ async function yahooGetHistorical(ticker, dateStr) {
 
     const quotes = result.quotes;
     const meta = result.meta;
-    
+
     // 找出最接近目標日期的資料 (timestamp 在 metadata 中通常代表最後交易時間)
     const targetTs = Math.floor(date.getTime() / 1000);
     let nearestIdx = quotes.length - 1;
-    
+
     for (let i = quotes.length - 1; i >= 0; i--) {
       const qDate = new Date(quotes[i].date);
       const qTs = Math.floor(qDate.getTime() / 1000);
       const tsDiff = Math.abs(qTs - targetTs);
-      
+
       // 如果時間戳記在 24 小時以內 (因為是 1d interval)，認為是該日的資料
       if (tsDiff < 86400) {
         nearestIdx = i;
@@ -387,14 +387,14 @@ async function getFxRate() {
     'https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/usd.json',
     'https://latest.currency-api.pages.dev/v1/currencies/usd.json',
   ];
-  
+
   for (const url of urls) {
     try {
       // fetch 取代 axios.get()
       const data = await fetchJson(url, config.EXCHANGE_TIMEOUT * 1000);
-      
+
       const twdRate = data?.usd?.twd;
-      
+
       if (twdRate !== undefined && twdRate !== null) {
         return twdRate;
       }
@@ -403,7 +403,7 @@ async function getFxRate() {
       continue;
     }
   }
-  
+
   return null; // 全部失敗
 }
 
@@ -472,7 +472,7 @@ function waitRandom() {
  */
 async function getGoogleCredentials() {
   const keyPath = path.resolve(config.GOOGLE_SERVICE_ACCOUNT_FILE);
-  
+
   if (!fs.existsSync(keyPath)) {
     throw new Error(`找不到 Service Account 金鑰檔案: ${keyPath}`);
   }
@@ -495,20 +495,20 @@ async function getGoogleCredentials() {
 async function getAllDatesInSheets() {
   const creds = await getGoogleCredentials();
   const service = google.sheets({ version: 'v4', auth: creds });
-  
+
   try {
     const response = await service.spreadsheets.values.get({
       spreadsheetId: config.SPREADSHEET_ID,
       range: `${config.SHEET_NAME}!A:A`,
       valueRenderOption: 'UNFORMATTED_VALUE',
     });
-    
+
     const values = response.data.values || [];
-    
+
     if (values.length === 0) {
       return [];
     }
-    
+
     // 回傳所有的日期 (包含表列)
     return values.map(row => row[0] || '').filter(d => d.trim() !== '');
   } catch (error) {
@@ -527,10 +527,10 @@ async function getAllDatesInSheets() {
 function findMissingDates(existingDates, requiredDates) {
   // 建立現有其他日期的 Set (去除空格)
   const existingSet = new Set(existingDates.map(d => d.trim()));
-  
+
   // 找出遺漏的日期
   const missing = requiredDates.filter(date => !existingSet.has(date.trim()));
-  
+
   return missing;
 }
 
@@ -554,14 +554,14 @@ async function checkAlreadyExistsInSheets(dateStr) {
 async function appendToSheets(rowData) {
   const creds = await getGoogleCredentials();
   const service = google.sheets({ version: 'v4', auth: creds });
-  
+
   // 先檢查是否已存在
   const exists = await checkAlreadyExistsInSheets(rowData[0]);
   if (exists) {
     logger.info(`日期 ${rowData[0]} 已有資料，跳過寫入 ✗`);
     return false;
   }
-  
+
   try {
     const response = await service.spreadsheets.values.append({
       spreadsheetId: config.SPREADSHEET_ID,
@@ -571,7 +571,7 @@ async function appendToSheets(rowData) {
         values: [rowData],
       },
     });
-    
+
     logger.info(`寫入成功! 共有 ${response.data.updates?.updatedRows || 1} 列更新 ✓`);
     return true;
   } catch (error) {
@@ -591,15 +591,65 @@ async function checkSheetCoverage(startDate, endDate) {
   const allDates = await getAllDatesInSheets();
   const requiredDays = getTradingDaysBetween(startDate, endDate);
   const missing = findMissingDates(allDates, requiredDays);
-  
+
   logger.info(`試算表檢查: 需要 ${requiredDays.length} 筆資料，已有 ${allDates.length} 筆 (範圍外)`)
   logger.info(`遺漏日期 (${missing.length}): ${missing.join(', ') || '無'}`);
-  
+
   return {
     missing,
     missingCount: missing.length,
     totalCount: requiredDays.length,
   };
+}
+
+/**
+ * 對試算表進行排序 (按日期 Column A, 由小到大)
+ */
+async function sortSheetsByDate() {
+  const creds = await getGoogleCredentials();
+  const service = google.sheets({ version: 'v4', auth: creds });
+
+  try {
+    // 取得試算表資訊以獲得 Sheet ID
+    const spreadsheet = await service.spreadsheets.get({
+      spreadsheetId: config.SPREADSHEET_ID,
+    });
+
+    const sheet = spreadsheet.data.sheets.find(s => s.properties.title === config.SHEET_NAME);
+    if (!sheet) {
+      throw new Error(`找不到工作表: ${config.SHEET_NAME}`);
+    }
+
+    const sheetId = sheet.properties.sheetId;
+
+    logger.info('正在對試算表進行日期排序...');
+
+    await service.spreadsheets.batchUpdate({
+      spreadsheetId: config.SPREADSHEET_ID,
+      requestBody: {
+        requests: [
+          {
+            sortRange: {
+              range: {
+                sheetId: sheetId,
+                startRowIndex: 1, // 跳過標題列
+              },
+              sortSpecs: [
+                {
+                  dimensionIndex: 0, // Column A (日期)
+                  sortOrder: 'ASCENDING',
+                },
+              ],
+            },
+          },
+        ],
+      },
+    });
+
+    logger.info('✅ 試算表排序完成!');
+  } catch (error) {
+    logger.error(`排序試算表失敗: ${error.message}`);
+  }
 }
 
 // ==============================================
@@ -614,25 +664,25 @@ async function checkSheetCoverage(startDate, endDate) {
  */
 async function fetchDay(dateStr) {
   logger.info(`--- 抓取 ${dateStr} 資料 ---`);
-  
+
   // 抓取 Yahoo Finance 歷史資料
   logger.info('  抓取台股指數 (^TWII)...');
   const market = await yahooGetHistorical('^TWII', dateStr);
   await waitRandom();
-  
+
   logger.info('  抓取台積電股價 (2330.TW)...');
   const tsmc = await yahooGetHistorical('2330.TW', dateStr);
   await waitRandom();
-  
+
   logger.info('  抓取台積電 ADR (TSM)...');
   const adr = await yahooGetHistorical('TSM', dateStr);
   await waitRandom();
-  
+
   // 匯率是現價，不需要歷史查詢
   logger.info('  抓取 USD/TWD 匯率...');
   const fx = await getFxRate();
   await waitRandom();
-  
+
   // 檢查是否有抓取到有效資料
   const hasMarket = market && !market.error;
   const hasTsmc = tsmc && !tsmc.error;
@@ -648,24 +698,24 @@ async function fetchDay(dateStr) {
   if (!hasMarket) logger.warn(`  ! 台股指數抓取失敗: ${market?.error || '未知錯誤'}`);
   if (!hasTsmc) logger.warn(`  ! 台積電股價抓取失敗: ${tsmc?.error || '未知錯誤'}`);
   if (!hasAdr) logger.warn(`  ! ADR 抓取失敗: ${adr?.error || '未知錯誤'}`);
-  
+
   if (fx === null) {
     logger.warn('  ! 匯率抓取失敗');
   }
-  
+
   logger.info('  ✅ 資料抓取流程完成');
-  
+
   // 計算漲跌 (如果資料缺失則回傳 null)
   const taiexPrice = hasMarket ? market.price : null;
   const taiexPrev = hasMarket ? market.prev_close : null;
   const taiexChange = calculateChange(taiexPrice, taiexPrev);
   const taiexPct = calculatePct(taiexPrice, taiexPrev);
-  
+
   const tsmcPrice = hasTsmc ? tsmc.price : null;
   const tsmcPrev = hasTsmc ? tsmc.prev_close : null;
   const tsmcChange = calculateChange(tsmcPrice, tsmcPrev);
   const tsmcPct = calculatePct(tsmcPrice, tsmcPrev);
-  
+
   // 組合 15 列資料
   const combinedRow = [
     dateStr,                              // 1. 日期
@@ -684,7 +734,7 @@ async function fetchDay(dateStr) {
     (hasAdr ? adr.price : null) || 'N/A', // 14. ADR (USD)
     fx || 'N/A',                          // 15. 匯率
   ];
-  
+
   return { success: true, row: combinedRow };
 }
 
@@ -704,14 +754,14 @@ async function main() {
   logger.info('='.repeat(50));
   logger.info('台灣股市每日資料自動抓取程式啟動 ✨ (no axios!)');
   logger.info('='.repeat(50));
-  
+
   // ===== 第一步: 解析 CLI 參數 =====
   const params = parseArgs();
-  
+
   // 取得目前台北時間的日期
   const today = getTodayStr();
   logger.info(`目前台北時間: ${today}\n`);
-  
+
   // ===== 模式 1: 單日模式 =====
   if (params.mode === 'single' && params.date) {
     // 使用者指定單一日期
@@ -728,7 +778,7 @@ async function main() {
     logger.info(`使用日期: ${today}`);
     await runSingleDay(today);
   }
-  
+
   // ===== 模式 2: 批次模式 =====
   else if (params.mode === 'batch' && params.startDate && params.endDate) {
     if (!isValidDate(params.startDate) || !isValidDate(params.endDate)) {
@@ -738,39 +788,39 @@ async function main() {
     logger.info(`批次模式: ${params.startDate} ~ ${params.endDate}`);
     await runBatch(params.startDate, params.endDate);
   }
-  
+
   // ===== 模式 3: 補齊模式 =====
   else if (params.mode === 'fill') {
     logger.info('補齊模式: 檢查並補齊試算表遺漏的資料');
-    
+
     // 取得試算表中的所有資料
     const allDates = await getAllDatesInSheets();
-    
+
     if (allDates.length === 0) {
       logger.warn('試算表為空！建議使用單日模式先初始化資料');
       return;
     }
-    
+
     // 找出最近的日期和最舊的日期
     // 注意: 日期格式 YYYY/MM/DD，可以直接字符串比較
     const sortedDates = allDates.filter(d => d.trim() !== '').sort();
     const earliest = sortedDates[0];
     const latest = sortedDates[sortedDates.length - 1];
-    
+
     // 找出遺漏的交易日
     const requiredDays = getTradingDaysBetween(earliest, latest);
     const missing = findMissingDates(allDates, requiredDays);
-    
+
     if (missing.length === 0) {
       logger.info('✓ 試算表資料完整！無遺漏資料');
       return;
     }
-    
+
     // 詢問使用者是否補齊
     logger.info(`發現 ${missing.length} 筆遺漏資料！`);
     logger.info('即將補齊以下日期:');
     missing.forEach(d => logger.info(`  - ${d}`));
-    
+
     // 自動補齊 (如果沒有其他互動需求，直接執行)
     const missingData = [];
     for (const dateStr of missing) {
@@ -781,12 +831,12 @@ async function main() {
         logger.error(`  ✗ 日期 ${dateStr} 抓取失敗: ${result.error || '未知錯誤'}`);
       }
     }
-    
+
     // 寫入試算表
     let successCount = 0;
     let skipCount = 0;
     let failCount = 0;
-    
+
     for (const item of missingData) {
       const combinedRow = [
         item.date,
@@ -800,23 +850,26 @@ async function main() {
         item.adr.price,
         item.fx,
       ];
-      
+
       const writeResult = await appendToSheets(combinedRow);
       if (writeResult) successCount++;
       else skipCount++;
     }
-    
+
     logger.info(`\n===== 補齊完成 ============`);
     logger.info(`成功寫入: ${successCount} 筆`);
     logger.info(`跳過 (已存在): ${skipCount} 筆`);
     logger.info(`抓取失敗: ${missing.length - missingData.length} 筆`);
   }
-  
+
   // ===== 無法判定的模式 ============
   else {
     logger.error('無法判定的模式！請檢查參數');
     process.exit(1);
   }
+
+  // 寫入後執行排序
+  await sortSheetsByDate();
 }
 
 /**
@@ -826,10 +879,10 @@ async function main() {
  */
 async function runSingleDay(dateStr) {
   logger.info(`目標日期: ${dateStr}\n`);
-  
+
   // 抓取單一日期資料
   const result = await fetchDay(dateStr);
-  
+
   if (!result.success) {
     if (result.skip) {
       logger.warn(`- 日期 ${dateStr} 跳過 (API 無任何有效資料)`);
@@ -838,23 +891,23 @@ async function runSingleDay(dateStr) {
     }
     return;
   }
-  
+
   const combinedRow = result.row;
-  
+
   // 寫入 Google Sheets
   const writeResult = await appendToSheets(combinedRow);
-  
+
   // 回報結果
   if (writeResult) {
     logger.info('\n✅ 全部工作完成!\n');
-    
+
     const headers = [
       '日期', '星期', '台股指數', '漲跌', '漲跌%',
       '成交金額', '外資買賣超', '外資多空單', '增減',
       '融資餘額', '增減', '台積電股價', '台積電漲跌%',
       'ADR (USD)', '匯率',
     ];
-    
+
     for (let i = 0; i < headers.length; i++) {
       const val = combinedRow[i];
       const status = (val !== null && val !== undefined && val !== 'N/A') ? '✓' : '✗';
@@ -874,18 +927,18 @@ async function runSingleDay(dateStr) {
 async function runBatch(startDate, endDate) {
   // 產生交易日列表
   const tradingDays = getTradingDaysBetween(startDate, endDate);
-  
+
   if (tradingDays.length === 0) {
     logger.warn(`在 ${startDate} ~ ${endDate} 區間內沒有交易日`);
     return;
   }
-  
+
   logger.info(`區間內共 ${tradingDays.length} 個交易日\n`);
-  
+
   // 檢查試算表完整性
   logger.info('=== 檢查試算表完整性 ===');
   const coverage = await checkSheetCoverage(startDate, endDate);
-  
+
   let daysToFetch;
   if (coverage.missingCount === 0) {
     logger.info('試算表資料完整！無需抓取\n');
@@ -894,15 +947,15 @@ async function runBatch(startDate, endDate) {
     daysToFetch = coverage.missing;
     logger.info(`需要抓取 ${daysToFetch.length} 筆遺漏資料\n`);
   }
-  
+
   // 逐一抓取遺漏的日期
   let successCount = 0;
   let skipCount = 0;
   let failDays = [];
-  
+
   for (const dateStr of daysToFetch) {
     logger.info(`[${successCount + 1}/${daysToFetch.length}] 抓取 ${dateStr}...`);
-    
+
     const result = await fetchDay(dateStr);
     if (!result.success) {
       if (result.skip) {
@@ -913,25 +966,26 @@ async function runBatch(startDate, endDate) {
       }
       continue;
     }
-    
+
     // 寫入試算表
     const writeResult = await appendToSheets(result.row);
     if (writeResult) successCount++;
     else skipCount++;
-    
+
     logger.info(''); // 空行分隔
   }
-  
+
   // 回報統計
   logger.info('===== 批次抓取完成 =====');
   logger.info(`成功寫入: ${successCount} 筆`);
   logger.info('跳過 (已存在): ${skipCount} 筆');
   logger.error(`抓取失敗: ${failDays.length} 筆`);
-  
+
   if (failDays.length > 0) {
     logger.error('失敗日期:');
     failDays.forEach(d => logger.error(`  - ${d.date}: ${d.error}`));
   }
+
 }
 
 // 程式入口點
