@@ -127,7 +127,7 @@ async function fetchDay(dateStr) {
   await waitRandom();
 
   logger.info('  抓取 USD/TWD 匯率...');
-  const fx = await getFxRate();
+  const fx = await getFxRate(dateStr);
   await waitRandom();
 
   logger.info('  抓取大盤成交金額...');
