@@ -60,13 +60,11 @@
 | 隨機延遲 | ✅ | 6-15 秒模擬真人 |
 | 日誌記錄 | ✅ | winston 模組 |
 | async/await 風格 | ✅ | 現代化异步程式設計 |
+| TAIFEX API 整合 | ✅ | 抓取外資期貨多空單及計算增減 |
 
 ## 未完成部分
 
-| 項目 | 說明 | 阻塞原因 |
-|------|------|------|
-| 外資多空單 (Col H) | 需期交所/證交所 API | 尚未實作 |
-| 增減 (Col I) | 需期交所/證交所 API | 尚未實作 |
+目前所有 15 個欄位皆已實作完畢。
 
 > TWSE API 已經整合，但請注意如果在境外伺服器執行可能會遇到 404 (需透過台灣 IP 或 VPN)。
 
@@ -78,7 +76,8 @@ taiwan-stock-daily-collector/
 ├── src/              # 功能模組
 │   ├── main.js
 │   ├── fetchYahoo.js
-│   ├── fetchExchange.js
+│   ├── fetchTwse.js
+│   ├── fetchTaifex.js
 │   ├── googleSheets.js
 │   ├── utils.js
 │   └── logger.js

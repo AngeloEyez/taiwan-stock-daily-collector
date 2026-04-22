@@ -21,6 +21,7 @@ const {
   getMarginBalance,
   getForeignInvestment,
 } = require('./fetchTwse');
+const { getForeignFutures } = require('./fetchTaifex');
 const {
   getTodayStr,
   getTradingDaysBetween,
@@ -138,6 +139,10 @@ async function fetchDay(dateStr) {
   const margin = await getMarginBalance(dateStr);
   await waitRandom();
 
+  logger.info('  抓取期交所外資多空單...');
+  const taifex = await getForeignFutures(dateStr);
+  await waitRandom();
+
   const hasMarket = market && !market.error;
   const hasTsmc = tsmc && !tsmc.error;
   const hasAdr = adr && !adr.error;
@@ -156,6 +161,7 @@ async function fetchDay(dateStr) {
   if (volume === null) logger.warn('  ! 大盤成交金額抓取失敗');
   if (foreign === null) logger.warn('  ! 外資買賣超抓取失敗');
   if (margin === null) logger.warn('  ! 融資餘額抓取失敗');
+  if (taifex === null) logger.warn('  ! 期交所外資多空單抓取失敗');
 
   logger.info('  ✅ 資料抓取流程完成');
 
@@ -174,8 +180,8 @@ async function fetchDay(dateStr) {
     calculatePct(taiexPrice, taiexPrev) || 'N/A',    // E. 漲跌%
     volume !== null ? volume : 'N/A',                 // F. 成交金額
     foreign !== null ? foreign : 'N/A',               // G. 外資買賣超
-    'N/A',                                            // H. 外資多空單 (待補)
-    'N/A',                                            // I. 增減 (待補)
+    taifex !== null ? taifex.netOpenInterest : 'N/A', // H. 外資多空單
+    taifex !== null ? taifex.diff : 'N/A',            // I. 增減
     margin !== null ? margin.balance : 'N/A',         // J. 融資餘額
     margin !== null ? margin.diff : 'N/A',            // K. 增減
     tsmcPrice || 'N/A',                               // L. 台積電股價
