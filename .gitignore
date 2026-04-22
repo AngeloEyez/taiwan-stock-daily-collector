@@ -20,6 +20,7 @@ google_token.json
 google_client_secret.json
 token.json
 credentials.json
+service_account.json
 
 # OS files
 .DS_Store

@@ -2,47 +2,23 @@
 
 ## Yahoo Finance API
 
-### 端點
-```
-GET https://query2.finance.yahoo.com/v8/finance/chart/{ticker}?interval=1d
+本專案使用 `yahoo-finance2` 套件進行資料抓取，該套件內部封裝了對 Yahoo Finance v8 chart API 的請求。
+
+### 抓取範例 (Node.js)
+```javascript
+const yahooFinance = require('yahoo-finance2').default;
+const result = await yahooFinance.chart('2330.TW', {
+  period1: startTime, // Unix timestamp
+  period2: endTime,
+  interval: '1d'
+});
 ```
 
-### 參數
-
-| 參數 | 說明 | 範例 |
-|---|---|---|
-| ticker | 股票代號 | `^TWII`, `2330.TW`, `TSM` |
-| interval | 時間間隔 | `1d` (每日) |
-
-### Headers
-```
-User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36
-```
-
-### 回應範例
-```json
-{
-  "chart": {
-    "result": [{
-      "meta": {
-        "symbol": "^TWII",
-        "regularMarketPrice": 23058.31,
-        "chartPreviousClose": 23162.24,
-        "currency": "TWD"
-      },
-      "indicators": {
-        "quote": [{
-          "close": [23058.31, ...],
-          "open": [23162.24, ...],
-          "high": [23180.50, ...],
-          "low": [23010.00, ...]
-        }]
-      },
-      "timestamp": [1712500000, ...]
-    }]
-  }
-}
-```
+### 資料欄位
+- **Symbol**: 股票代號 (`^TWII`, `2330.TW`, `TSM`)
+- **Price**: 收盤價
+- **Previous Close**: 前一日收盤價 (用於計算漲跌)
+- **Quotes**: 包含 open, high, low, close, volume 等歷史資料陣列
 
 ---
 
@@ -247,29 +223,20 @@ async function fetchTaifexFutures(queryDate) {
 
 ---
 
-## Google OAuth 設定
+## Google Sheets API (Service Account 模式)
 
-### 需要授權的範圍
-```
-https://www.googleapis.com/auth/spreadsheets
-```
+本專案採用 **Service Account (服務帳戶)** 進行驗證，適合自動化無人值守執行。
 
-### OAuth 設定步驟
+### 認證流程
 
-1. 前往 [Google Cloud Console](https://console.cloud.google.com/)
-2. 建立 OAuth 2.0 Desktop 類型憑證
-3. 下載 `client_secret.json`
-4. 取得試算表的 `SPREADSHEET_ID` (從 URL 取得)
-5. 授權產生 `token.json`
+1. 前往 [Google Cloud Console](https://console.cloud.google.com/)。
+2. 建立一個服務帳戶，並下載其 **JSON 金鑰檔案**。
+3. 將該 JSON 檔案命名為 `service_account.json` 並放入專案目錄。
+4. 將您的試算表 **分享** 給該服務帳戶的 Email (權限設為「編輯者」)。
+5. 在 `.env` 中設定 `GOOGLE_SERVICE_ACCOUNT_FILE=service_account.json`。
 
-### OAuth 權杖格式
-```json
-{
-  "access_token": "ya29.xxx...",
-  "refresh_token": "1//0gxxx...",
-  "expiry_date": 1712583600000
-}
-```
+### 安全提示
+- `service_account.json` 包含敏感私鑰，已預設加入 `.gitignore`，請勿上傳至公開版本庫。
 
 ---
 

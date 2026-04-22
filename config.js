@@ -50,9 +50,8 @@ const config = {
   SPREADSHEET_ID: getString('SPREADSHEET_ID', ''),
   SHEET_NAME: getString('SHEET_NAME', '工作表1'),
   
-  // OAuth 憑證路徑
-  TOKEN_PATH: getString('TOKEN_PATH', '/root/.hermes/google_token.json'),
-  CLIENT_SECRET_PATH: getString('CLIENT_SECRET_PATH', '/root/.hermes/google_client_secret.json'),
+  // Google Service Account 憑證金鑰
+  GOOGLE_SERVICE_ACCOUNT_FILE: getString('GOOGLE_SERVICE_ACCOUNT_FILE', 'service_account.json'),
   
   // API 設定
   YAHOO_TIMEOUT: getInt('YAHOO_TIMEOUT', 15),

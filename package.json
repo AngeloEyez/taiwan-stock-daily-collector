@@ -21,7 +21,8 @@
   "dependencies": {
     "dotenv": "^16.4.0",
     "googleapis": "^144.0.0",
-    "winston": "^3.14.0"
+    "winston": "^3.14.0",
+    "yahoo-finance2": "^3.14.0"
   },
   "engines": {
     "node": ">=18.0.0"

@@ -34,6 +34,8 @@ const path = require('path');
 // Node.js 18+ 內建的 fetch，不需要 npm install axios!
 const { google } = require('googleapis');
 const winston = require('winston');
+const YahooFinance = require('yahoo-finance2').default;
+const yahooFinance = new YahooFinance();
 
 // 載入配置
 const config = require('./config');
@@ -214,49 +216,19 @@ function isWeekend(date) {
   return day === 0 || day === 6; // 0=星期日, 6=星期六
 }
 
-/**
- * 判斷是否為國定假日 (簡化版，僅檢查日期字串)
- * 國定假日參考：元旦(01/01)、和平紀念日(02/28)、中秋節、國慶日(10/10)等
- * 注意：實際假日每年可能調整，這裡只做基本檢查
- * 
- * @param {string} dateStr - 日期字串 (YYYY/MM/DD)
- * @returns {boolean} - 是假日則回傳 true
- */
-function isHoliday(dateStr) {
-  const [yearStr, monthStr, dayStr] = dateStr.split('/');
-  const month = parseInt(monthStr, 10);
-  const day = parseInt(dayStr, 10);
-  
-  // 元旦：01/01
-  if (month === 1 && day === 1) return true;
-  // 和平紀念日：02/28
-  if (month === 2 && day === 28) return true;
-  // 國慶日：10/10
-  if (month === 10 && day === 10) return true;
-  // 跨年：12/31
-  if (month === 12 && day === 31) return true;
-  // 中秋節：通常在農曆八月十五，這裡簡化為 09/15-10/15 範圍內的週一~週五
-  
-  return false;
-}
 
 /**
  * 判斷當天是否有股市開市
- * 排除週末和國定假日
+ * 僅排除週末
  * 
  * @param {string} dateStr - 日期字串 (/YYYY/MM/DD)
- * @returns {boolean} - 開市則回傳 true
+ * @returns {boolean} - 非週末則回傳 true
  */
 function isTradingDay(dateStr) {
   const date = dateStrToDate(dateStr);
   
-  // 先檢查是否為週末
-  if (isWeekend(date)) return false;
-  
-  // 再檢查是否為國定假日
-  if (isHoliday(dateStr)) return false;
-  
-  return true;
+  // 僅檢查是否為週末
+  return !isWeekend(date);
 }
 
 /**
@@ -345,55 +317,57 @@ async function fetchJson(url, timeout = 15000, headers = TWSE_HEADERS) {
  *   Promise<Object>: 包含價格、開盤、高低、成交量等
  */
 async function yahooGetHistorical(ticker, dateStr) {
-  // Yahoo Finance chart API 支援查詢特定日期
-  // startTime 和 endTime 使用 Unix timestamp (秒)
   const date = dateStrToDate(dateStr);
-  // 設定查詢日期為目標日期的全天
-  const endTime = Math.floor(date.getTime() / 1000);
-  const startTime = endTime - 86400; // 往前一小時，確保查到當天資料
-  
-  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?interval=1d&period1=${startTime}&period2=${endTime}`;
-  
+  const startTime = Math.floor(date.getTime() / 1000);
+  const endTime = startTime + 86400; // 目標日期後 24 小時
+
   try {
-    const data = await fetchJson(url);
-    const result = data.chart?.result;
-    
-    if (!result || result.length === 0) {
+    // 擴大範圍到往前 2 天，確保能抓到歷史資料與前一收盤價
+    const startTimeLocal = startTime - 86400 * 2;
+    const result = await yahooFinance.chart(ticker, {
+      period1: startTimeLocal,
+      period2: endTime,
+      interval: '1d',
+    });
+
+    if (!result || !result.quotes || result.quotes.length === 0) {
       return { error: 'Yahoo Finance 回傳空的結果' };
     }
+
+    const quotes = result.quotes;
+    const meta = result.meta;
     
-    const meta = result[0].meta || {};
-    const quotes = result[0].indicators?.quote?.[0] || {};
-    const timestamps = result[0].timestamp || [];
-    
-    // 找出最接近目標日期的資料
-    // 如果該日期有資料，使用該資料，否則使用最近一筆可用資料
+    // 找出最接近目標日期的資料 (timestamp 在 metadata 中通常代表最後交易時間)
     const targetTs = Math.floor(date.getTime() / 1000);
-    let nearestIdx = timestamps.length - 1; // 預設用最後一筆
+    let nearestIdx = quotes.length - 1;
     
-    for (let i = timestamps.length - 1; i >= 0; i--) {
-      const tsDiff = Math.abs(timestamps[i] - targetTs);
-      // 如果時間戳記在 2 小時以內，認為是目標日期的資料
-      if (tsDiff < 7200) {
+    for (let i = quotes.length - 1; i >= 0; i--) {
+      const qDate = new Date(quotes[i].date);
+      const qTs = Math.floor(qDate.getTime() / 1000);
+      const tsDiff = Math.abs(qTs - targetTs);
+      
+      // 如果時間戳記在 24 小時以內 (因為是 1d interval)，認為是該日的資料
+      if (tsDiff < 86400) {
         nearestIdx = i;
         break;
       }
     }
-    
+
+    const quote = quotes[nearestIdx];
+
     return {
       symbol: meta.symbol || ticker,
-      price: meta.regularMarketPrice || quotes.close?.[nearestIdx] || null,
+      price: quote.close || meta.regularMarketPrice || null,
       prev_close: meta.chartPreviousClose || null,
-      open: quotes.open?.[nearestIdx] || null,
-      close: quotes.close?.[nearestIdx] || null,
-      high: quotes.high?.[nearestIdx] || null,
-      low: quotes.low?.[nearestIdx] || null,
-      volume: meta.regularMarketVolume || quotes.volume?.[nearestIdx] || null,
+      open: quote.open || null,
+      close: quote.close || null,
+      high: quote.high || null,
+      low: quote.low || null,
+      volume: quote.volume || meta.regularMarketVolume || null,
       currency: meta.currency,
-      timestamp: timestamps[nearestIdx] || null,
-      dateMatched: nearestIdx < timestamps.length - 1, // 是否精確匹配到目標日期
+      timestamp: Math.floor(new Date(quote.date).getTime() / 1000),
+      dateMatched: true,
     };
-    
   } catch (error) {
     return { error: `Yahoo Finance 請求失敗: ${error.message}` };
   }
@@ -491,84 +465,25 @@ function waitRandom() {
 // ==============================================
 
 /**
- * 讀取 OAuth 憑證並重建 Google API Credentials
+ * 讀取 Service Account 憑證並建立 Google API Auth 客戶端
  * 
  * 回傳:
- *   Credentials: Google OAuth 憑證物件
+ *   authClient: Google Auth 客戶端物件
  */
 async function getGoogleCredentials() {
-  // 讀取 token.json
-  const tokenPath = config.TOKEN_PATH;
-  const tokenPathObj = path.resolve(tokenPath);
-  const tokenData = JSON.parse(fs.readFileSync(tokenPathObj, 'utf8'));
+  const keyPath = path.resolve(config.GOOGLE_SERVICE_ACCOUNT_FILE);
   
-  // 讀取 client_secret.json
-  const clientSecretPath = config.CLIENT_SECRET_PATH;
-  const clientSecretPathObj = path.resolve(clientSecretPath);
-  const clientData = JSON.parse(fs.readFileSync(clientSecretPathObj, 'utf8'));
-  
-  // 取得 credentials (支援 installed 或 web 格式)
-  const credsData = clientData.web || clientData.installed || {};
-  
-  if (!credsData.client_id || !credsData.client_secret) {
-    throw new Error('找不到 client_id 或 client_secret');
+  if (!fs.existsSync(keyPath)) {
+    throw new Error(`找不到 Service Account 金鑰檔案: ${keyPath}`);
   }
-  
-  const redirectUri = credsData.redirect_uris?.[0] || credsData.redirect_uris?.[0] || 'urn:ietf:wg:oauth:2.0:oob';
-  
-  const creds = new google.auth.OAuth2(
-    credsData.client_id,
-    credsData.client_secret,
-    redirectUri
-  );
 
-  // 正確設定 credentials (使用 setCredentials)
-  const expiryDate = tokenData.expiry || tokenData.expiry_date
-    ? new Date(tokenData.expiry || tokenData.expiry_date).getTime()
-    : undefined;
-    
-  creds.setCredentials({
-    access_token: tokenData.token || tokenData.access_token,
-    refresh_token: tokenData.refresh_token,
-    expiry_date: expiryDate,
+  const auth = new google.auth.GoogleAuth({
+    keyFile: keyPath,
+    scopes: ['https://www.googleapis.com/auth/spreadsheets'],
   });
-  
-  // 檢查 token 是否過期
-  let expired = false;
-  if (expiryDate && expiryDate < Date.now()) {
-    expired = true;
-  }
-  
-  if (expired && tokenData.refresh_token) {
-    logger.info('Token 已過期，正在自動刷新...');
-    try {
-      // 用同步 callback 方式刷新 (避免 async/await 的複雜度)
-      await new Promise((resolve, reject) => {
-        creds.refreshToken(tokenData.refresh_token, (err, result, resp) => {
-          if (err) reject(err);
-          else {
-            // 寫回更新後的 token
-            const refreshedData = { ...tokenData };
-            refreshedData.token = creds.token || creds.credentials.access_token;
-            refreshedData.expiry = new Date(creds.expiryDate).toISOString();
-            if (creds.refreshToken) {
-              refreshedData.refresh_token = creds.refreshToken;
-            }
-            fs.writeFileSync(tokenPathObj, JSON.stringify(refreshedData, null, 2));
-            logger.info('Token 刷新成功 ✓');
-            resolve(result);
-          }
-        });
-      });
-    } catch (refreshError) {
-      logger.error(`Token 刷新失敗: ${refreshError.message}`);
-      throw new Error('無法刷新 OAuth token，請重新授權');
-    }
-  }
-  
-  // 返回 OAuth2 credentials (google.sheets auth 參數需要這個)
-  // creds 物件本身已有 request() 方法
-  return creds;
+
+  const authClient = await auth.getClient();
+  return authClient;
 }
 
 /**
@@ -719,55 +634,58 @@ async function fetchDay(dateStr) {
   await waitRandom();
   
   // 檢查是否有抓取到有效資料
-  if (!market || market.error) {
-    logger.error(`  ✗ 台股指數抓取失敗: ${market.error || '未知錯誤'}`);
-    return { success: false, error: `台股指數抓取失敗: ${market.error || '未知錯誤'}` };
+  const hasMarket = market && !market.error;
+  const hasTsmc = tsmc && !tsmc.error;
+  const hasAdr = adr && !adr.error;
+
+  // 如果所有主要資料都沒有抓到，則視為當天不開市或無資料
+  if (!hasMarket && !hasTsmc && !hasAdr) {
+    logger.warn(`  ! 日期 ${dateStr} 所有來源均無效資料，可能為非交易日。`);
+    return { success: false, skip: true, error: '所有來源均無有效資料' };
   }
-  if (!tsmc || tsmc.error) {
-    logger.error(`  ✗ 台積電股價抓取失敗: ${tsmc.error || '未知錯誤'}`);
-    return { success: false, error: `台積電股價抓取失敗: ${tsmc.error || '未知錯誤'}` };
-  }
-  if (!adr || adr.error) {
-    logger.error(`  ✗ ADR 抓取失敗: ${adr.error || '未知錯誤'}`);
-    return { success: false, error: `ADR 抓取失敗: ${adr.error || '未知錯誤'}` };
-  }
+
+  // 即使只有部分資料抓取失敗，我們也記錄下來 (填入 N/A)
+  if (!hasMarket) logger.warn(`  ! 台股指數抓取失敗: ${market?.error || '未知錯誤'}`);
+  if (!hasTsmc) logger.warn(`  ! 台積電股價抓取失敗: ${tsmc?.error || '未知錯誤'}`);
+  if (!hasAdr) logger.warn(`  ! ADR 抓取失敗: ${adr?.error || '未知錯誤'}`);
+  
   if (fx === null) {
-    logger.error('  ✗ 匯率抓取失敗');
-    return { success: false, error: '匯率抓取失敗' };
+    logger.warn('  ! 匯率抓取失敗');
   }
   
-  logger.info('  ✅ 所有抓取完成!');
+  logger.info('  ✅ 資料抓取流程完成');
   
-  // 計算漲跌
-  const taiexChange = calculateChange(market.price, market.prev_close);
-  const taiexPct = calculatePct(market.price, market.prev_close);
+  // 計算漲跌 (如果資料缺失則回傳 null)
+  const taiexPrice = hasMarket ? market.price : null;
+  const taiexPrev = hasMarket ? market.prev_close : null;
+  const taiexChange = calculateChange(taiexPrice, taiexPrev);
+  const taiexPct = calculatePct(taiexPrice, taiexPrev);
   
-  const tsmcChange = calculateChange(tsmc.price, tsmc.prev_close);
-  const tsmcPct = calculatePct(tsmc.price, tsmc.prev_close);
+  const tsmcPrice = hasTsmc ? tsmc.price : null;
+  const tsmcPrev = hasTsmc ? tsmc.prev_close : null;
+  const tsmcChange = calculateChange(tsmcPrice, tsmcPrev);
+  const tsmcPct = calculatePct(tsmcPrice, tsmcPrev);
   
   // 組合 15 列資料
   const combinedRow = [
-    dateStr,                    // 1. 日期
-    'N/A',                      // 2. 星期 (稍後補上)
-    market.price,               // 3. 台股指數
-    taiexChange,                // 4. 漲跌
-    taiexPct,                   // 5. 漲跌%
-    'N/A',                      // 6. 成交金額 (未來補充)
-    'N/A',                      // 7. 外資買賣超 (未來補充)
-    'N/A',                      // 8. 外資多空單 (未來補充)
-    'N/A',                      // 9. 增減 (未來補充)
-    'N/A',                      // 10. 融資餘額 (未來補充)
-    'N/A',                      // 11. 增減 (未來補充)
-    tsmc.price,                 // 12. 台積電股價
-    tsmcPct,                    // 13. 台積電漲落%
-    adr.price,                  // 14. ADR (USD)
-    fx,                         // 15. 匯率
+    dateStr,                              // 1. 日期
+    getWeekday(dateStr),                  // 2. 星期
+    taiexPrice || 'N/A',                  // 3. 台股指數
+    taiexChange || 'N/A',                 // 4. 漲跌
+    taiexPct || 'N/A',                    // 5. 漲跌%
+    'N/A',                                // 6. 成交金額
+    'N/A',                                // 7. 外資買賣超
+    'N/A',                                // 8. 外資多空單
+    'N/A',                                // 9. 增減
+    'N/A',                                // 10. 融資餘額
+    'N/A',                                // 11. 增減
+    tsmcPrice || 'N/A',                   // 12. 台積電股價
+    tsmcPct || 'N/A',                     // 13. 台積電漲落%
+    (hasAdr ? adr.price : null) || 'N/A', // 14. ADR (USD)
+    fx || 'N/A',                          // 15. 匯率
   ];
   
-  // 修正星期 (放在第二列)
-  combinedRow[1] = getWeekday(dateStr);
-  
-  return { success: true, row: combinedRow, data: { market, tsmc, adr, fx } };
+  return { success: true, row: combinedRow };
 }
 
 // ==============================================
@@ -913,7 +831,11 @@ async function runSingleDay(dateStr) {
   const result = await fetchDay(dateStr);
   
   if (!result.success) {
-    logger.error(`✗ 日期 ${dateStr} 抓取失敗: ${result.error}`);
+    if (result.skip) {
+      logger.warn(`- 日期 ${dateStr} 跳過 (API 無任何有效資料)`);
+    } else {
+      logger.error(`✗ 日期 ${dateStr} 抓取失敗: ${result.error}`);
+    }
     return;
   }
   
@@ -983,7 +905,12 @@ async function runBatch(startDate, endDate) {
     
     const result = await fetchDay(dateStr);
     if (!result.success) {
-      failDays.push({ date: dateStr, error: result.error });
+      if (result.skip) {
+        logger.warn(`- 日期 ${dateStr} 跳過 (API 無任何有效資料)`);
+        skipCount++;
+      } else {
+        failDays.push({ date: dateStr, error: result.error });
+      }
       continue;
     }
     
