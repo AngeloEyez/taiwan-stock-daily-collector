@@ -53,6 +53,7 @@
 |------|------|------|
 | Yahoo Finance API 整合 | ✅ | 抓取 ^TWII, 2330.TW, TSM |
 | Exchange API 整合 | ✅ | 抓取 USD/TWD, 含備用 CDN |
+| TWSE API 整合 | ✅ | 大盤成交金額、外資買賣超、融資餘額 |
 | Google Sheets API 整合 | ✅ | OAuth2, append, 去重檢查 |
 | .env 環境變數 | ✅ | 機密資訊分離 |
 | config.js 配置管理 | ✅ | 使用 dotenv |
@@ -64,16 +65,10 @@
 
 | 項目 | 說明 | 阻塞原因 |
 |------|------|------|
-| 成交金額 (Col F) | 需 twse.com.tw API | 本機無法存取台灣境內 API |
-| 外資買賣超 (Col G) | 需 twse.com.tw API | 同上 |
-| 外資多空單 (Col H) | 需 twse.com.tw API | 同上 |
-| 增減 (Col I) | 需 twse.com.tw API | 同上 |
-| 融資餘額 (Col J) | 需 twse.com.tw API | 同上 |
-| 增減 (Col K) | 需 twse.com.tw API | 同上 |
+| 外資多空單 (Col H) | 需期交所/證交所 API | 尚未實作 |
+| 增減 (Col I) | 需期交所/證交所 API | 尚未實作 |
 
-> 這 5 欄需要台灣境內的證券交易所 API (twse.com.tw/rwd/zh/afterTrading 或 mops.twse.org.tw)。
-> 目前本機伺服器在境外，無法存取這些 API (全部 404)。
-> **解法**: 透過 SSH 到 GB10-ollama (192.168.1.5, 台灣境內) 執行爬取，或用台灣 VPS。
+> TWSE API 已經整合，但請注意如果在境外伺服器執行可能會遇到 404 (需透過台灣 IP 或 VPN)。
 
 ## 檔案結構
 

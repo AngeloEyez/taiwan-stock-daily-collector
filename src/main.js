@@ -17,6 +17,11 @@ const {
   sortSheetsByDate,
 } = require('./googleSheets');
 const {
+  getMarketVolume,
+  getMarginBalance,
+  getForeignInvestment,
+} = require('./fetchTwse');
+const {
   getTodayStr,
   getTradingDaysBetween,
   findMissingDates,
@@ -121,6 +126,18 @@ async function fetchDay(dateStr) {
   const fx = await getFxRate();
   await waitRandom();
 
+  logger.info('  抓取大盤成交金額...');
+  const volume = await getMarketVolume(dateStr);
+  await waitRandom();
+
+  logger.info('  抓取外資買賣超...');
+  const foreign = await getForeignInvestment(dateStr);
+  await waitRandom();
+
+  logger.info('  抓取融資餘額...');
+  const margin = await getMarginBalance(dateStr);
+  await waitRandom();
+
   const hasMarket = market && !market.error;
   const hasTsmc = tsmc && !tsmc.error;
   const hasAdr = adr && !adr.error;
@@ -136,6 +153,9 @@ async function fetchDay(dateStr) {
   if (!hasTsmc) logger.warn(`  ! 台積電股價抓取失敗: ${tsmc?.error || '未知錯誤'}`);
   if (!hasAdr) logger.warn(`  ! ADR 抓取失敗: ${adr?.error || '未知錯誤'}`);
   if (fx === null) logger.warn('  ! 匯率抓取失敗');
+  if (volume === null) logger.warn('  ! 大盤成交金額抓取失敗');
+  if (foreign === null) logger.warn('  ! 外資買賣超抓取失敗');
+  if (margin === null) logger.warn('  ! 融資餘額抓取失敗');
 
   logger.info('  ✅ 資料抓取流程完成');
 
@@ -152,12 +172,12 @@ async function fetchDay(dateStr) {
     taiexPrice || 'N/A',                              // C. 台股指數
     calculateChange(taiexPrice, taiexPrev) || 'N/A', // D. 漲跌
     calculatePct(taiexPrice, taiexPrev) || 'N/A',    // E. 漲跌%
-    'N/A',                                            // F. 成交金額 (待補)
-    'N/A',                                            // G. 外資買賣超 (待補)
+    volume !== null ? volume : 'N/A',                 // F. 成交金額
+    foreign !== null ? foreign : 'N/A',               // G. 外資買賣超
     'N/A',                                            // H. 外資多空單 (待補)
     'N/A',                                            // I. 增減 (待補)
-    'N/A',                                            // J. 融資餘額 (待補)
-    'N/A',                                            // K. 增減 (待補)
+    margin !== null ? margin.balance : 'N/A',         // J. 融資餘額
+    margin !== null ? margin.diff : 'N/A',            // K. 增減
     tsmcPrice || 'N/A',                               // L. 台積電股價
     calculatePct(tsmcPrice, tsmcPrev) || 'N/A',      // M. 台積電漲跌%
     (hasAdr ? adr.price : null) || 'N/A',             // N. ADR (USD)
