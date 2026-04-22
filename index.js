@@ -213,34 +213,78 @@ function waitRandom() {
  * 回傳:
  *   Credentials: Google OAuth 憑證物件
  */
-function getGoogleCredentials() {
+async function getGoogleCredentials() {
   // 讀取 token.json
-  const tokenData = JSON.parse(fs.readFileSync(config.TOKEN_PATH, 'utf8'));
+  const tokenPath = config.TOKEN_PATH;
+  const tokenPathObj = path.resolve(tokenPath);
+  const tokenData = JSON.parse(fs.readFileSync(tokenPathObj, 'utf8'));
   
   // 讀取 client_secret.json
-  const clientData = JSON.parse(fs.readFileSync(config.CLIENT_SECRET_PATH, 'utf8'));
+  const clientSecretPath = config.CLIENT_SECRET_PATH;
+  const clientSecretPathObj = path.resolve(clientSecretPath);
+  const clientData = JSON.parse(fs.readFileSync(clientSecretPathObj, 'utf8'));
   
   // 取得 credentials (支援 installed 或 web 格式)
   const credsData = clientData.web || clientData.installed || {};
   
+  if (!credsData.client_id || !credsData.client_secret) {
+    throw new Error('找不到 client_id 或 client_secret');
+  }
+  
+  const redirectUri = credsData.redirect_uris?.[0] || credsData.redirect_uris?.[0] || 'urn:ietf:wg:oauth:2.0:oob';
+  
   const creds = new google.auth.OAuth2(
     credsData.client_id,
     credsData.client_secret,
-    credsData.redirect_uris?.[0] || 'urn:ietf:wg:oauth:2.0:oob'
+    redirectUri
   );
-  
+
+  // 正確設定 credentials (使用 setCredentials)
+  const expiryDate = tokenData.expiry || tokenData.expiry_date
+    ? new Date(tokenData.expiry || tokenData.expiry_date).getTime()
+    : undefined;
+    
   creds.setCredentials({
-    access_token: tokenData.access_token || tokenData.token,
+    access_token: tokenData.token || tokenData.access_token,
     refresh_token: tokenData.refresh_token,
-    expiry_date: tokenData.expiry_date,
+    expiry_date: expiryDate,
   });
   
-  // 如果 token 已過期，自動刷新
-  if (creds.isTokenExpired()) {
-    logger.info('Token 已過期，正在自動刷新...');
-    // OAuth2 物件自動處理 refresh
+  // 檢查 token 是否過期
+  let expired = false;
+  if (expiryDate && expiryDate < Date.now()) {
+    expired = true;
   }
   
+  if (expired && tokenData.refresh_token) {
+    logger.info('Token 已過期，正在自動刷新...');
+    try {
+      // 用同步 callback 方式刷新 (避免 async/await 的複雜度)
+      await new Promise((resolve, reject) => {
+        creds.refreshToken(tokenData.refresh_token, (err, result, resp) => {
+          if (err) reject(err);
+          else {
+            // 寫回更新後的 token
+            const refreshedData = { ...tokenData };
+            refreshedData.token = creds.token || creds.credentials.access_token;
+            refreshedData.expiry = new Date(creds.expiryDate).toISOString();
+            if (creds.refreshToken) {
+              refreshedData.refresh_token = creds.refreshToken;
+            }
+            fs.writeFileSync(tokenPathObj, JSON.stringify(refreshedData, null, 2));
+            logger.info('Token 刷新成功 ✓');
+            resolve(result);
+          }
+        });
+      });
+    } catch (refreshError) {
+      logger.error(`Token 刷新失敗: ${refreshError.message}`);
+      throw new Error('無法刷新 OAuth token，請重新授權');
+    }
+  }
+  
+  // 返回 OAuth2 credentials (google.sheets auth 參數需要這個)
+  // creds 物件本身已有 request() 方法
   return creds;
 }
 
