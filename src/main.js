@@ -15,6 +15,8 @@ const {
   getAllDatesInSheets,
   appendToSheets,
   sortSheetsByDate,
+  deleteRowsByDateRange,
+  batchAppendToSheets,
 } = require('./googleSheets');
 const {
   getMarketVolume,
@@ -25,6 +27,7 @@ const { getForeignFutures } = require('./fetchTaifex');
 const {
   getTodayStr,
   getTradingDaysBetween,
+  getNTradingDaysAgo,
   findMissingDates,
   getWeekday,
   waitRandom,
@@ -200,39 +203,17 @@ async function fetchDay(dateStr) {
 /**
  * 執行單日模式
  *
- * @param {string} dateStr - 日期字串 (YYYY/MM/DD)
+ * @param {string} dateStr - 日期字串 (YYYY/MM/DD)，若為 null 則執行預設區間
  */
 async function runSingleDay(dateStr) {
-  logger.info(`目標日期: ${dateStr}\n`);
-
-  const result = await fetchDay(dateStr);
-
-  if (!result.success) {
-    if (result.skip) {
-      logger.warn(`- 日期 ${dateStr} 跳過 (API 無任何有效資料)`);
-    } else {
-      logger.error(`✗ 日期 ${dateStr} 抓取失敗: ${result.error}`);
-    }
-    return;
-  }
-
-  const writeResult = await appendToSheets(result.row);
-
-  if (writeResult) {
-    logger.info('\n✅ 全部工作完成!\n');
-    const headers = [
-      '日期', '星期', '台股指數', '漲跌', '漲跌%',
-      '成交金額', '外資買賣超', '外資多空單', '增減',
-      '融資餘額', '增減', '台積電股價', '台積電漲跌%',
-      'ADR (USD)', '匯率',
-    ];
-    for (let i = 0; i < headers.length; i++) {
-      const val = result.row[i];
-      const status = (val !== null && val !== undefined && val !== 'N/A') ? '✓' : '✗';
-      logger.info(`  ${status} ${headers[i]}: ${val ?? 'N/A'}`);
-    }
+  if (dateStr) {
+    logger.info(`🎯 目標日期: ${dateStr} (指定模式)`);
+    await runBatch(dateStr, dateStr);
   } else {
-    logger.info('\n寫入跳過 (可能已存在今天的資料)。');
+    const today = getTodayStr();
+    const startDate = getNTradingDaysAgo(today, 3);
+    logger.info(`🎯 目標區間: ${startDate} ~ ${today} (預設「當日+前3個交易日」模式)`);
+    await runBatch(startDate, today);
   }
 }
 
@@ -246,31 +227,24 @@ async function runBatch(startDate, endDate) {
   const tradingDays = getTradingDaysBetween(startDate, endDate);
 
   if (tradingDays.length === 0) {
-    logger.warn(`在 ${startDate} ~ ${endDate} 區間內沒有交易日`);
+    logger.warn(`ℹ️ 在 ${startDate} ~ ${endDate} 區間內沒有交易日`);
     return;
   }
 
-  logger.info(`區間內共 ${tradingDays.length} 個交易日\n`);
+  logger.info(`🚀 開始批次處理區間: ${startDate} ~ ${endDate} (共 ${tradingDays.length} 個交易日)`);
 
-  // 先檢查試算表中的現有資料
-  logger.info('=== 檢查試算表完整性 ===');
-  const allDates = await getAllDatesInSheets();
-  const missing = findMissingDates(allDates, tradingDays);
+  // 1. 先刪除現有資料
+  await deleteRowsByDateRange(startDate, endDate);
 
-  if (missing.length === 0) {
-    logger.info('試算表資料完整！無需抓取\n');
-    return;
-  }
-
-  logger.info(`需要抓取 ${missing.length} 筆遺漏資料\n`);
-
+  // 2. 逐日抓取資料
+  const rowsToAppend = [];
   let successCount = 0;
   let skipCount = 0;
   const failDays = [];
 
-  for (let i = 0; i < missing.length; i++) {
-    const dateStr = missing[i];
-    logger.info(`[${i + 1}/${missing.length}] 抓取 ${dateStr}...`);
+  for (let i = 0; i < tradingDays.length; i++) {
+    const dateStr = tradingDays[i];
+    logger.info(`\n[${i + 1}/${tradingDays.length}] 正在抓取 ${dateStr} 資料...`);
 
     const result = await fetchDay(dateStr);
 
@@ -284,20 +258,27 @@ async function runBatch(startDate, endDate) {
       continue;
     }
 
-    const writeResult = await appendToSheets(result.row);
-    if (writeResult) successCount++;
-    else skipCount++;
-
-    logger.info('');
+    rowsToAppend.push(result.row);
+    successCount++;
+    
+    // 如果不是最後一天，等待一段隨機時間
+    if (i < tradingDays.length - 1) {
+      await waitRandom();
+    }
   }
 
-  logger.info('===== 批次抓取完成 =====');
-  logger.info(`成功寫入: ${successCount} 筆`);
-  logger.info(`跳過 (已存在): ${skipCount} 筆`);
-  logger.info(`抓取失敗: ${failDays.length} 筆`);
+  // 3. 批次寫入
+  if (rowsToAppend.length > 0) {
+    await batchAppendToSheets(rowsToAppend);
+  }
+
+  logger.info('\n===== 任務執行報告 =====');
+  logger.info(`成功抓取: ${successCount} 筆`);
+  logger.info(`跳過 (無資料): ${skipCount} 筆`);
+  logger.info(`失敗筆數: ${failDays.length} 筆`);
 
   if (failDays.length > 0) {
-    logger.error('失敗日期:');
+    logger.error('失敗日期詳情:');
     failDays.forEach(d => logger.error(`  - ${d.date}: ${d.error}`));
   }
 }
@@ -309,7 +290,7 @@ async function runFill() {
   const allDates = await getAllDatesInSheets();
 
   if (allDates.length === 0) {
-    logger.warn('試算表為空！建議使用單日模式先初始化資料');
+    logger.warn('⚠️ 試算表為空！建議使用單日模式先初始化資料');
     return;
   }
 
@@ -317,41 +298,32 @@ async function runFill() {
   const earliest = sortedDates[0];
   const latest = sortedDates[sortedDates.length - 1];
 
-  logger.info(`試算表日期範圍: ${earliest} ~ ${latest}`);
+  logger.info(`🔍 試算表目前日期範圍: ${earliest} ~ ${latest}`);
 
   const requiredDays = getTradingDaysBetween(earliest, latest);
   const missing = findMissingDates(allDates, requiredDays);
 
   if (missing.length === 0) {
-    logger.info('✓ 試算表資料完整！無遺漏資料');
+    logger.info('✅ 試算表資料完整！無遺漏資料');
     return;
   }
 
-  logger.info(`發現 ${missing.length} 筆遺漏資料！`);
-  logger.info('即將補齊以下日期:');
-  missing.forEach(d => logger.info(`  - ${d}`));
-
-  let successCount = 0;
-  let skipCount = 0;
-  let failCount = 0;
-
+  logger.info(`💡 發現 ${missing.length} 筆遺漏資料，即將補齊...`);
+  
+  // 補齊模式我們使用 batchAppendToSheets 但不需要先刪除 (因為是補齊)
+  const rowsToAppend = [];
   for (const dateStr of missing) {
     const result = await fetchDay(dateStr);
-    if (!result.success) {
-      logger.error(`  ✗ 日期 ${dateStr} 抓取失敗: ${result.error || '未知錯誤'}`);
-      failCount++;
-      continue;
+    if (result.success) {
+      rowsToAppend.push(result.row);
+      await waitRandom();
     }
-
-    const writeResult = await appendToSheets(result.row);
-    if (writeResult) successCount++;
-    else skipCount++;
   }
-
-  logger.info('===== 補齊完成 ============');
-  logger.info(`成功寫入: ${successCount} 筆`);
-  logger.info(`跳過 (已存在): ${skipCount} 筆`);
-  logger.info(`抓取失敗: ${failCount} 筆`);
+  
+  if (rowsToAppend.length > 0) {
+    await batchAppendToSheets(rowsToAppend);
+  }
+  logger.info('✨ 補齊作業完成');
 }
 
 // ==============================================
@@ -368,50 +340,47 @@ async function main() {
 
   const params = parseArgs();
   const today = getTodayStr();
-  logger.info(`目前台北時間: ${today}\n`);
+  logger.info(`⏰ 目前台北時間: ${today}\n`);
 
-  // 模式 1: 單日模式
+  // 模式 1: 單日模式 (含無參數預設模式)
   if (params.mode === 'single') {
     if (params.date) {
       if (!isValidDate(params.date)) {
-        logger.error(`無效的日期格式: ${params.date}，請使用 YYYY/MM/DD 格式`);
+        logger.error(`❌ 無效的日期格式: ${params.date}，請使用 YYYY/MM/DD 格式`);
         process.exit(1);
       }
-      logger.info(`指定日期: ${params.date}`);
       await runSingleDay(params.date);
     } else {
-      logger.info('預設模式 (單日模式): 抓取今日資料');
-      await runSingleDay(today);
+      await runSingleDay(null); // 執行預設區間
     }
   }
 
   // 模式 2: 批次模式
   else if (params.mode === 'batch') {
     if (!params.startDate || !params.endDate) {
-      logger.error('批次模式需要同時提供 --start 與 --end 參數');
+      logger.error('❌ 批次模式需要同時提供 --start 與 --end 參數');
       process.exit(1);
     }
     if (!isValidDate(params.startDate) || !isValidDate(params.endDate)) {
-      logger.error('無效的日期格式，請使用 YYYY/MM/DD 格式');
+      logger.error('❌ 無效的日期格式，請使用 YYYY/MM/DD 格式');
       process.exit(1);
     }
-    logger.info(`批次模式: ${params.startDate} ~ ${params.endDate}`);
     await runBatch(params.startDate, params.endDate);
   }
 
   // 模式 3: 補齊模式
   else if (params.mode === 'fill') {
-    logger.info('補齊模式: 檢查並補齊試算表遺漏的資料');
     await runFill();
   }
 
   else {
-    logger.error('無法判定的模式！請檢查參數');
+    logger.error('❌ 無法判定的模式！請檢查參數');
     process.exit(1);
   }
 
   // 所有寫入完成後執行排序
   await sortSheetsByDate();
+  logger.info('\n✅ 全部工作順利完成!\n');
 }
 
 module.exports = { main };

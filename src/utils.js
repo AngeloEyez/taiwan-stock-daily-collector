@@ -129,6 +129,27 @@ async function fetchJson(url, timeout = 15000, headers = { 'User-Agent': 'Mozill
   }
 }
 
+/**
+ * 回推指定數量的交易日 (不含週末)
+ * @param {string} startDateStr - 起始日期 (YYYY/MM/DD)
+ * @param {number} n - 要回推的交易日數量
+ * @returns {string} 回推後的日期字串 (YYYY/MM/DD)
+ */
+function getNTradingDaysAgo(startDateStr, n) {
+  let count = 0;
+  let cur = dateStrToDate(startDateStr);
+  
+  while (count < n) {
+    // 往前推一天
+    cur = new Date(cur.getTime() - 86400000);
+    const str = dateToStr(cur);
+    if (isTradingDay(str)) {
+      count++;
+    }
+  }
+  return dateToStr(cur);
+}
+
 module.exports = {
   getTodayStr,
   dateStrToDate,
@@ -136,6 +157,7 @@ module.exports = {
   isWeekend,
   isTradingDay,
   getTradingDaysBetween,
+  getNTradingDaysAgo,
   findMissingDates,
   getWeekday,
   waitRandom,
