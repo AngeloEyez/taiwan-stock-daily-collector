@@ -89,7 +89,7 @@ async function getForeignFuturesBatch(startDate, endDate) {
       // 只保留在目標區間 startDate ~ endDate 內的日期
       if (rec.date < startDate || rec.date > endDate) continue;
 
-      let diff = 'N/A';
+      let diff = '';
       if (i > 0) {
         const prevRec = allRecords[i - 1];
         diff = rec.netOpenInterest - prevRec.netOpenInterest;

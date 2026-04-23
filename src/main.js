@@ -206,19 +206,19 @@ function combineRow(dateStr, yahooData, fxRate, twseData, taifexData) {
   const row = [
     dateStr,                                           // A. 日期
     getWeekday(dateStr),                               // B. 星期
-    taiexPrice || 'N/A',                               // C. 台股指數
-    calculateChange(taiexPrice, taiexPrev) || 'N/A',  // D. 漲跌
-    calculatePct(taiexPrice, taiexPrev) || 'N/A',     // E. 漲跌%
-    twseData?.volume  ?? 'N/A',                        // F. 成交金額
-    twseData?.foreign ?? 'N/A',                        // G. 外資買賣超
-    taifexData?.netOpenInterest ?? 'N/A',              // H. 外資多空單
-    taifexData?.diff ?? 'N/A',                         // I. 增減
-    twseData?.margin?.balance ?? 'N/A',                // J. 融資餘額
-    twseData?.margin?.diff    ?? 'N/A',                // K. 增減
-    tsmcPrice || 'N/A',                                // L. 台積電股價
-    calculatePct(tsmcPrice, tsmcPrev) || 'N/A',       // M. 台積電漲跌%
-    hasAdr ? (adr.price || 'N/A') : 'N/A',            // N. ADR (USD)
-    fxRate || 'N/A',                                   // O. 匯率
+    taiexPrice ?? '',                                  // C. 台股指數
+    calculateChange(taiexPrice, taiexPrev) ?? '',      // D. 漲跌
+    calculatePct(taiexPrice, taiexPrev) ?? '',         // E. 漲跌%
+    twseData?.volume  ?? '',                           // F. 成交金額
+    twseData?.foreign ?? '',                           // G. 外資買賣超
+    taifexData?.netOpenInterest ?? '',                 // H. 外資多空單
+    taifexData?.diff ?? '',                            // I. 增減
+    twseData?.margin?.balance ?? '',                   // J. 融資餘額
+    twseData?.margin?.diff    ?? '',                   // K. 增減
+    tsmcPrice ?? '',                                   // L. 台積電股價
+    calculatePct(tsmcPrice, tsmcPrev) ?? '',          // M. 台積電漲跌%
+    hasAdr ? (adr.price ?? '') : '',                  // N. ADR (USD)
+    fxRate ?? '',                                      // O. 匯率
   ];
 
   return { row, skip: false };

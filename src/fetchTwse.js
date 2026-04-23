@@ -150,7 +150,7 @@ async function getMarginBalance(dateStr) {
   const prevVal = prevIdx !== -1 ? parseNumber(targetRow[prevIdx]) : null;
 
   const balanceE = Math.round((todayVal / 100000) * 100) / 100; // 單位: 仟元 -> 億元
-  const diffE = prevVal !== null ? Math.round(((todayVal - prevVal) / 100000) * 100) / 100 : 'N/A';
+  const diffE = prevVal !== null ? Math.round(((todayVal - prevVal) / 100000) * 100) / 100 : '';
 
   return {
     balance: balanceE,
