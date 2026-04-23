@@ -135,7 +135,7 @@ async function batchAppendToSheets(rows) {
   await service.spreadsheets.values.append({
     spreadsheetId: config.SPREADSHEET_ID,
     range: config.SHEET_NAME,
-    valueInputOption: 'RAW',
+    valueInputOption: 'USER_ENTERED',
     requestBody: { values: rows },
   });
 

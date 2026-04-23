@@ -120,7 +120,7 @@ async function getMarketVolume(dateStr) {
   }
 
   const val = parseNumber(targetRow[colIdx]);
-  return (val / 100000000).toFixed(2); // 轉為億元
+  return Math.round((val / 100000000) * 100) / 100; // 轉為億元 (數字)
 }
 
 /**
@@ -149,8 +149,8 @@ async function getMarginBalance(dateStr) {
   const todayVal = parseNumber(targetRow[todayIdx]);
   const prevVal = prevIdx !== -1 ? parseNumber(targetRow[prevIdx]) : null;
 
-  const balanceE = (todayVal / 100000).toFixed(2); // 單位: 仟元 -> 億元
-  const diffE = prevVal !== null ? ((todayVal - prevVal) / 100000).toFixed(2) : 'N/A';
+  const balanceE = Math.round((todayVal / 100000) * 100) / 100; // 單位: 仟元 -> 億元
+  const diffE = prevVal !== null ? Math.round(((todayVal - prevVal) / 100000) * 100) / 100 : 'N/A';
 
   return {
     balance: balanceE,
@@ -180,7 +180,7 @@ async function getForeignInvestment(dateStr) {
   if (diffIdx === -1) return null;
 
   const val = parseNumber(targetRow[diffIdx]);
-  return (val / 100000000).toFixed(2); // 轉為億元
+  return Math.round((val / 100000000) * 100) / 100; // 轉為億元 (數字)
 }
 
 /**
