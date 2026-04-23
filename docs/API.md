@@ -152,27 +152,32 @@ GET https://www.taifex.com.tw/cht/3/futContractsDate?queryDate=2026/04/21&commod
 - **使用方式**: axios 請求 + cheerio/jsdom 解析 HTML table
 - **⚠️ 可用於所有日期**（包含歷史資料）← **推薦方案**
 
-### futContractsDateDown (CSV) — **僅限當天有效** ⚠️
+### futContractsDateDown (CSV) — **支援近三年歷史資料** ✅
 
 ```
-GET https://www.taifex.com.tw/cht/3/futContractsDateDown?queryDate=2026/04/21&commodityId=
+POST https://www.taifex.com.tw/cht/3/futContractsDateDown
+Body: queryStartDate=2026/04/01&queryEndDate=2026/04/21&commodityId=
 ```
 
-- **限制**: **僅能查詢當天或 1-2 天內的日期**
-- **過期日期查詢**: 回傳 610-byte HTML redirect (`alert("查無資料")`)
-- **編碼**: Big5 (需 iconv 解碼)
+- **歷史資料**: **支援近三年歷史資料批次下載** (一次 POST 取得整個日期區間)
+- **編碼**: Big5 (需 TextDecoder('big5') 解碼)
 - **Headers (必選)**:
   ```
-  Referer: https://www.taifex.com.tw/cht/3/futContractsDate
+  Content-Type: application/x-www-form-urlencoded
   User-Agent: Mozilla/5.0
   ```
-- **CSV 欄位**:
-  - col0=機構名稱, col1=買進口數, col2=賣出口數, col3=淨額口數
-  - col4=買進金額, col5=賣出金額, col6=淨額金額, col7=未平倉餘額
-  - col3 = col1 - col2 (正=淨多, 負=淨空)
-- **外資期貨未平倉餘額** = 外資列的 col3 (淨額口數)
-- **❌ Node.js axios 也可行，但同樣只限當天**
-- **歷史資料**：只能用 futContractsDate (HTML) 或 Playwright
+- **POST 參數**:
+  - `queryStartDate`: 起始日期 (YYYY/MM/DD)
+  - `queryEndDate`: 結束日期 (YYYY/MM/DD)
+  - `commodityId`: 留空=全部商品；TX=臺股期貨
+- **CSV 欄位 (col 0-indexed)**:
+  - col0=日期, col1=商品名稱, col2=身份別
+  - col3=多方口數, col4=多方金額, col5=空方口數, col6=空方金額
+  - col7=多空淨額口數, col8=多空淨額金額
+  - col9=多方未平倉口數, col10=多方未平倉金額
+  - col11=空方未平倉口數, col12=空方未平倉金額
+  - **col13=多空淨額未平倉口數** ← 外資多空單淨額使用此欄
+- **外資期貨未平倉餘額** = `外資及陸資` 列的 col13
 
 ### futContractsDateAh (夜盤)
 ```

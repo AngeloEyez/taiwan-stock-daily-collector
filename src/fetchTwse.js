@@ -1,13 +1,19 @@
 // src/fetchTwse.js
 /**
  * fetchTwse.js - 取得台灣證券交易所 (TWSE) 相關資料
+ *
+ * TWSE API 每個端點均只接受單一日期參數，不支援區間查詢。
+ * 批次模式透過 fetchTwseBatch 逐日呼叫，統一管理三個 API 的呼叫順序與等待。
  */
-const { fetchJson } = require('./utils');
+const { fetchJson, waitRandom } = require('./utils');
 const config = require('../config');
 const logger = require('./logger');
 
 /**
- * 通用 TWSE 請求，有防呆和超時設定
+ * 通用 TWSE 請求，含防呆與超時設定
+ *
+ * @param {string} url
+ * @returns {Promise<Object|null>}
  */
 async function fetchTwse(url) {
   try {
@@ -25,6 +31,10 @@ async function fetchTwse(url) {
 
 /**
  * 尋找包含特定關鍵字的資料表 (處理 TWSE 回傳 fields1, data1 等多表結構，以及新的 tables 陣列)
+ *
+ * @param {Object} data   - TWSE API 回傳的 JSON 物件
+ * @param {string} keyword - 要搜尋的欄位名稱關鍵字
+ * @returns {{fields: string[], data: Array[]}|null}
  */
 function findTable(data, keyword) {
   // 支援新的 tables 格式
@@ -75,6 +85,9 @@ function findTable(data, keyword) {
 
 /**
  * 處理含逗號字串的數字解析
+ *
+ * @param {string} str
+ * @returns {number}
  */
 function parseNumber(str) {
   if (!str) return 0;
@@ -84,7 +97,8 @@ function parseNumber(str) {
 
 /**
  * 1. 取得大盤成交金額 (億)
- * @param {string} dateStr YYYY/MM/DD
+ *
+ * @param {string} dateStr - YYYY/MM/DD
  * @returns {Promise<string|null>} 成交金額 (億)，失敗回傳 null
  */
 async function getMarketVolume(dateStr) {
@@ -102,7 +116,7 @@ async function getMarketVolume(dateStr) {
   // 找尋 "總計" 或第一列
   let targetRow = table.data.find(r => r[0].includes('總計') || r[0].includes('加權指數'));
   if (!targetRow) {
-      targetRow = table.data[0];
+    targetRow = table.data[0];
   }
 
   const val = parseNumber(targetRow[colIdx]);
@@ -111,7 +125,8 @@ async function getMarketVolume(dateStr) {
 
 /**
  * 2. 取得融資餘額 (億) 與增減 (億)
- * @param {string} dateStr YYYY/MM/DD
+ *
+ * @param {string} dateStr - YYYY/MM/DD
  * @returns {Promise<{balance: string, diff: string}|null>} 失敗回傳 null
  */
 async function getMarginBalance(dateStr) {
@@ -139,13 +154,14 @@ async function getMarginBalance(dateStr) {
 
   return {
     balance: balanceE,
-    diff: diffE
+    diff: diffE,
   };
 }
 
 /**
  * 3. 取得外資買賣超金額 (億)
- * @param {string} dateStr YYYY/MM/DD
+ *
+ * @param {string} dateStr - YYYY/MM/DD
  * @returns {Promise<string|null>} 買賣超金額 (億)，失敗回傳 null
  */
 async function getForeignInvestment(dateStr) {
@@ -167,8 +183,46 @@ async function getForeignInvestment(dateStr) {
   return (val / 100000000).toFixed(2); // 轉為億元
 }
 
+/**
+ * 批次取得多個交易日的 TWSE 三項資料 (成交金額、外資買賣超、融資餘額)
+ * TWSE API 不支援區間查詢，仍需逐日呼叫，但集中管理以簡化 main.js 的流程。
+ *
+ * @param {string[]} tradingDays - 交易日陣列 (YYYY/MM/DD)
+ * @returns {Promise<Map<string, {volume: string|null, foreign: string|null, margin: Object|null}>>}
+ *   以日期字串為 key 的 Map
+ */
+async function fetchTwseBatch(tradingDays) {
+  const resultMap = new Map();
+
+  logger.info(`  抓取 TWSE 資料 (共 ${tradingDays.length} 天，每天 3 個端點)...`);
+
+  for (let i = 0; i < tradingDays.length; i++) {
+    const dateStr = tradingDays[i];
+    logger.info(`    [${i + 1}/${tradingDays.length}] TWSE ${dateStr}...`);
+
+    const volume = await getMarketVolume(dateStr);
+    await waitRandom();
+
+    const foreign = await getForeignInvestment(dateStr);
+    await waitRandom();
+
+    const margin = await getMarginBalance(dateStr);
+
+    // 最後一天抓完不需要等待 (由呼叫端決定是否繼續等待)
+    if (i < tradingDays.length - 1) {
+      await waitRandom();
+    }
+
+    resultMap.set(dateStr, { volume, foreign, margin });
+  }
+
+  logger.info(`  ✅ TWSE 批次查詢完成，共 ${resultMap.size} 天`);
+  return resultMap;
+}
+
 module.exports = {
   getMarketVolume,
   getMarginBalance,
-  getForeignInvestment
+  getForeignInvestment,
+  fetchTwseBatch,
 };

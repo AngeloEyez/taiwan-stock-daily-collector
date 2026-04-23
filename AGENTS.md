@@ -3,7 +3,7 @@
 ## 專案目標
 
 自動每日抓取台灣股市資料並寫入 Google Sheets (股市data 1)。
-目前自動抓取 10/15 欄位，還有 5 欄需要台灣境內證券交易所 API 才能取得。
+目前自動抓取 15/15 欄位，已全部實作完成。
 
 ## 技術棧
 
@@ -17,50 +17,78 @@
 
 ## 整體架構
 
+### 抓取流程 (v2.1 批次架構)
+
+```
+按「資料來源」批次抓取，而非「按日期」逐日抓取
+
+runBatch(startDate, endDate)
+  │
+  ├─ 1. 按來源批次抓取 (fetchAllDataBatch)
+  │     ├─ Yahoo Finance: 3 ticker 各 1 次請求，取整個區間  ← 原生支援區間
+  │     ├─ TAIFEX: 1 次 POST 請求，取整個區間  ← 原生支援區間
+  │     ├─ Exchange: 逐日呼叫 (無區間 API)
+  │     └─ TWSE: 逐日呼叫 3 個端點 (無區間 API)
+  │
+  ├─ 2. 記憶體組合 (buildRows)
+  │     └─ Map<date, data> 暫存區 → 逐日 combineRow → rows[]
+  │
+  ├─ 3. 刪除 Sheets 舊資料 (deleteRowsByDateRange)
+  │
+  └─ 4. 批次寫入 (batchAppendToSheets)
+```
+
+### 模組架構
+
 ```
 ┌───────────────────────┐
 │  .env (環境變數)      │
 │  SPREADSHEET_ID       │
-│  TOKEN_PATH           │
-│  CLIENT_SECRET_PATH   │
+│  GOOGLE_SERVICE_...   │
 └─────┬─────────────────┘
       │ 載入
-┌─────▼──────────────────┐
+┌─────▼────────────────┐
 │  config.js             │
 │  讀取 .env, 提供       │
 │  config 配置           │
-└─────┬──────────────────┘
+└─────┬──────────────┘
       │ config 配置
-┌─────▼──────────────────┐
+┌─────▼────────────────┐
 │  collect.js (CLI入口)  │
 │  ┌──────────────────┐  │
 │  │ src/main.js       │  │
+│  │   - 批次資料抓取    │  │
+│  │   - 記憶體組合    │  │
 │  │   - 流程控制      │  │
-│  └────────┬─────────┘  │
-│  ┌────────▼─────────┐  │
+│  └───────┬──────────┘  │
+│  ┌───────▼──────────┐  │
 │  │ src/fetchYahoo.js │  │
-│  │ src/fetchExchange.│  │
+│  │ src/fetchExchange. │  │
+│  │ src/fetchTwse.js  │  │
+│  │ src/fetchTaifex.  │  │
 │  │ src/googleSheets. │  │
 │  │ src/utils.js      │  │
 │  │ src/logger.js     │  │
 │  └──────────────────┘  │
-└─────────────────────────┘
+└───────────────────────┘
 ```
 
 ## 已完成部分 ✓
 
 | 項目 | 狀態 | 說明 |
 |------|------|------|
-| Yahoo Finance API 整合 | ✅ | 抓取 ^TWII, 2330.TW, TSM |
+| Yahoo Finance API 整合 | ✅ | 批次區間抓取 ^TWII, 2330.TW, TSM |
 | Exchange API 整合 | ✅ | 抓取 USD/TWD, 含備用 CDN |
 | TWSE API 整合 | ✅ | 大盤成交金額、外資買賣超、融資餘額 |
-| Google Sheets API 整合 | ✅ | OAuth2, append, 去重檢查 |
+| Google Sheets API 整合 | ✅ | Service Account, 批次寫入, 去重檢查 |
 | .env 環境變數 | ✅ | 機密資訊分離 |
 | config.js 配置管理 | ✅ | 使用 dotenv |
 | 隨機延遲 | ✅ | 6-15 秒模擬真人 |
 | 日誌記錄 | ✅ | winston 模組 |
 | async/await 風格 | ✅ | 現代化异步程式設計 |
-| TAIFEX API 整合 | ✅ | 抓取外資期貨多空單及計算增減 |
+| TAIFEX API 整合 | ✅ | 批次區間抓取外資期貨多空單及計算增減 |
+| **真實批次處理架構** | ✅ | 按來源批次抓取，記憶體 Map 暫存，然後寫入 |
+| **googleapis 延遲引入** | ✅ | 將載入時間藏在資料下載期間 |
 
 ## 未完成部分
 
@@ -111,12 +139,21 @@ LOG_LEVEL=info
 
 ### 新增欄位功能
 
-如果要新增某個欄位 (例如成交金額):
+如果要新增某個欄位：
 
-1. 新增 API 抓取函數 (如 `fetchVolume()`)
-2. 在 `src/main.js` 中呼叫並取得資料
-3. 將結果放入 `combinedRow` 對應位置 (目前 Col F = 索引 5)
+1. 新增 API 抓取函數 (如 `fetchVolumeBatch(tradingDays)`)，回傳 `Map<date, value>`
+2. 在 `fetchAllDataBatch()` 中加入該批次函數的呼叫
+3. 在 `combineRow()` 中將對應 Map 的資料放入組合列的對應位置
 4. 更新 README.md 與本文件
+
+### API 區間支援表
+
+| 資料來源 | 區間支援 | 抱取策略 |
+|---------|------------|----------|
+| Yahoo Finance | ✅ 原生支援 | `yahooGetHistoricalBatch(ticker, start, end)` |
+| TAIFEX | ✅ 原生支援 | `getForeignFuturesBatch(start, end)` |
+| Exchange API | ❌ 不支援 | `getFxRateBatch(tradingDays)` 逐日 |
+| TWSE | ❌ 不支援 | `fetchTwseBatch(tradingDays)` 逐日 |
 
 ### 測試方式
 
