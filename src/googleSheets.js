@@ -20,9 +20,9 @@ const logger = require('./logger');
  * @returns {Promise<Object>} Google Auth client
  */
 async function getGoogleCredentials() {
-  // 延遲引入：只有第一次呼叫 Sheets 相關函數時才載入 googleapis
-  // Node.js 的 require() 有快取機制，之後呼叫不會重複解析模組
-  const { google } = require('googleapis');
+  // 延遲引入：只有第一次呼叫 Sheets 相關函數時才載入 @googleapis/sheets
+  // 使用輕量級套件 @googleapis/sheets 替代完整的 googleapis
+  const google = require('@googleapis/sheets');
 
   const keyPath = path.resolve(config.GOOGLE_SERVICE_ACCOUNT_FILE);
   if (!fs.existsSync(keyPath)) {

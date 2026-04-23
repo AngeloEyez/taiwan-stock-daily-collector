@@ -20,8 +20,8 @@
   "author": "AngeloEyez",
   "license": "MIT",
   "dependencies": {
+    "@googleapis/sheets": "^13.0.1",
     "dotenv": "^16.4.0",
-    "googleapis": "^171.4.0",
     "winston": "^3.14.0",
     "yahoo-finance2": "^3.14.0"
   },

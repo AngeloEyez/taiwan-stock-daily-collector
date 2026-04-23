@@ -18,6 +18,7 @@ const logger = require('./logger');
 const { yahooGetHistoricalBatch } = require('./fetchYahoo');
 const { getFxRateBatch } = require('./fetchExchange');
 const {
+  getGoogleCredentials,
   getAllDatesInSheets,
   batchAppendToSheets,
   sortSheetsByDate,
