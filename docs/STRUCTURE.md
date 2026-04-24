@@ -6,13 +6,14 @@
 taiwan-stock-daily-collector/
 │
 ├── collect.js            # ★ CLI 入口點，執行 src/main.js
-├── config.js             # 環境變數載入器 (dotenv)
-├── index.js              # 相容性保留檔 (已廢棄，勿直接執行)
 │
 ├── src/                  # 功能模組目錄
+│   ├── config.js         # 環境變數載入器 (dotenv)
 │   ├── logger.js         # Winston logger 設定與匯出
 │   ├── utils.js          # 共用工具函式
 │   ├── fetchYahoo.js     # Yahoo Finance API 抓取
+│   ├── fetchTwse.js      # 證交所 API 抓取
+│   ├── fetchTaifex.js    # 期交所 API 抓取
 │   ├── fetchExchange.js  # 匯率 API 抓取 (fawazahmed0)
 │   ├── googleSheets.js   # Google Sheets API 讀寫
 │   └── main.js           # 主程式：CLI 解析與三種執行模式
@@ -46,9 +47,9 @@ npm run collect
 
 ---
 
-### `config.js` - 環境變數載入
+### `src/config.js` - 環境變數載入
 
-- 使用 `dotenv` 讀取 `.env` 檔案。
+- 使用 `dotenv` 讀取根目錄的 `.env` 檔案。
 - 匯出所有設定值供其他模組使用。
 - 依賴：`dotenv`
 
@@ -71,7 +72,7 @@ npm run collect
 
 - 建立並匯出一個全域 `logger` 實例 (Winston)。
 - 日誌層級從 `config.LOG_LEVEL` 讀取。
-- 依賴：`winston`, `../config`
+- 依賴：`winston`, `./config`
 
 ---
 
@@ -99,6 +100,7 @@ npm run collect
 ### `src/fetchYahoo.js` - Yahoo Finance 抓取
 
 - 封裝向 Yahoo Finance 查詢歷史資料的邏輯。
+- 設有 **15 天緩衝期**，確保長假後首個交易日能取得前一收盤價。
 - 依賴：`yahoo-finance2`, `./utils`, `./logger`
 
 | 函式 | 說明 |
@@ -112,11 +114,25 @@ npm run collect
 
 ---
 
+### `src/fetchTwse.js` - 證交所 API 抓取
+
+- 負責抓取成交金額、外資買賣超、融資餘額。
+- 依賴：`./utils`, `./logger`, `./config`
+
+---
+
+### `src/fetchTaifex.js` - 期交所 API 抓取
+
+- 負責抓取外資期貨多空單淨額。
+- 依賴：`./utils`, `./logger`
+
+---
+
 ### `src/fetchExchange.js` - 匯率 API 抓取
 
 - 從 fawazahmed0 開放匯率 API 取得 USD/TWD。
 - 設有主備兩個 CDN URL，失敗自動切換。
-- 依賴：`./utils`, `./logger`, `../config`
+- 依賴：`./utils`, `./logger`, `./config`
 
 | 函式 | 說明 |
 |---|---|
@@ -128,7 +144,7 @@ npm run collect
 
 - 封裝所有 Google Sheets API v4 操作。
 - 使用 Service Account 驗證。
-- 依賴：`googleapis`, `../config`, `./logger`
+- 依賴：`googleapis`, `./config`, `./logger`
 
 | 函式 | 說明 |
 |---|---|
@@ -145,16 +161,6 @@ npm run collect
 - 整合所有模組，實作三種 CLI 執行模式。
 - 依賴：所有 `src/` 模組
 
-| 函式 | 說明 |
-|---|---|
-| `parseArgs()` | 解析 CLI 參數 (`--date`, `--start`, `--end`, `--fill`) |
-| `isValidDate(str)` | 驗證日期字串格式 |
-| `fetchDay(dateStr)` | 抓取並組合單一日期的 15 欄資料 |
-| `runSingleDay(dateStr)` | 執行單日模式 |
-| `runBatch(start, end)` | 執行批次模式 |
-| `runFill()` | 執行補齊模式 |
-| `main()` | 程式入口，解析模式並分派執行 |
-
 ---
 
 ## 模組相依圖
@@ -163,20 +169,50 @@ npm run collect
 collect.js
   └── src/main.js
         ├── src/logger.js
-        │     └── config.js
+        │     └── src/config.js
         ├── src/utils.js
-        │     ├── config.js
+        │     ├── src/config.js
         │     └── src/logger.js
         ├── src/fetchYahoo.js
         │     ├── src/utils.js
         │     └── src/logger.js
+        ├── src/fetchTwse.js
+        │     ├── src/utils.js
+        │     └── src/config.js
+        ├── src/fetchTaifex.js
+        │     ├── src/utils.js
+        │     └── src/logger.js
         ├── src/fetchExchange.js
         │     ├── src/utils.js
-        │     └── config.js
+        │     └── src/config.js
         └── src/googleSheets.js
-              ├── config.js
+              ├── src/config.js
               └── src/logger.js
 ```
+
+---
+
+## 📊 試算表欄位詳細定義
+
+以下為試算表中 15 個欄位的詳細定義與單位說明：
+
+| 欄位 | 名稱 | 單位 | 說明 |
+|---|---|---|---|
+| A | 日期 | YYYY/MM/DD | 交易日日期 |
+| B | 星期 | 一~日 | 該日期對應的星期幾 |
+| C | 台股指數 | 點 | 台灣加權股價指數 (^TWII) 收盤價 |
+| D | 漲跌 | 點 | 與前一交易日指數收盤價之差額 |
+| E | 漲跌% | % | 指數漲跌百分比 (保留兩位小數) |
+| F | 成交金額 | 億元 | 證交所大盤總成交金額 |
+| G | 外資買賣超 | 億元 | 三大法人中「外資及陸資」的買賣差額合計 |
+| H | 外資多空單 | 口 | 期交所外資台指期貨未平倉淨口數 |
+| I | 增減 | 口 | 外資多空單淨口數與前一交易日之差額 |
+| J | 融資餘額 | 億元 | 證交所市場融資餘額總計 |
+| K | 增減 | 億元 | 融資餘額與前一交易日之差額 |
+| L | 台積電股價 | 元 | 台積電 (2330.TW) 在台股之收盤價 |
+| M | 台積電漲跌% | % | 台積電當日漲跌百分比 |
+| N | ADR (USD) | 美元 | 台積電 ADR (TSM) 在美股之收盤價 |
+| O | 匯率 | TWD/USD | USD 對 TWD 之匯率 (1 美元兌換台幣金額) |
 
 ---
 
@@ -189,12 +225,12 @@ collect.js
 | C | 台股指數 | ✅ | Yahoo Finance `^TWII` |
 | D | 漲跌 | ✅ | `utils.calculateChange` |
 | E | 漲跌% | ✅ | `utils.calculatePct` |
-| F | 成交金額 | ❌ | 需 twse.com.tw API |
-| G | 外資買賣超 | ❌ | 需 twse.com.tw API |
-| H | 外資多空單 | ❌ | 需 twse.com.tw API |
-| I | 增減 | ❌ | 需 twse.com.tw API |
-| J | 融資餘額 | ❌ | 需 twse.com.tw API |
-| K | 增減 | ❌ | 需 twse.com.tw API |
+| F | 成交金額 | ✅ | 證交所 API (MI_INDEX) |
+| G | 外資買賣超 | ✅ | 證交所 API (BFI82U) |
+| H | 外資多空單 | ✅ | 期交所 API (futContractsDateDown) |
+| I | 增減 | ✅ | 程式計算 |
+| J | 融資餘額 | ✅ | 證交所 API (MI_MARGN) |
+| K | 增減 | ✅ | 證交所 API (MI_MARGN) |
 | L | 台積電股價 | ✅ | Yahoo Finance `2330.TW` |
 | M | 台積電漲跌% | ✅ | `utils.calculatePct` |
 | N | ADR (USD) | ✅ | Yahoo Finance `TSM` |

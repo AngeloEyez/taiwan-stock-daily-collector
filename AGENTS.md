@@ -10,7 +10,7 @@
 | 項目 | 使用套件版本 |
 |------|------|
 | 執行環境 | Node.js >= 18.0.0 |
-| HTTP 請求 | axios |
+| HTTP 請求 | fetch (原生) |
 | Google Sheets | googleapis (原生 OAuth2) |
 | 日誌 | winston |
 | 環境變數 | dotenv |
@@ -25,8 +25,8 @@
 runBatch(startDate, endDate)
   │
   ├─ 1. 按來源批次抓取 (fetchAllDataBatch)
-  │     ├─ Yahoo Finance: 3 ticker 各 1 次請求，取整個區間  ← 原生支援區間
-  │     ├─ TAIFEX: 1 次 POST 請求，取整個區間  ← 原生支援區間
+  │     ├─ Yahoo Finance: 3 ticker 各 1 次請求，取整個區間 (緩衝 15 天)
+  │     ├─ TAIFEX: 1 次 POST 請求，取整個區間 (緩衝 15 天)
   │     ├─ Exchange: 逐日呼叫 (無區間 API)
   │     └─ TWSE: 逐日呼叫 3 個端點 (無區間 API)
   │
@@ -48,7 +48,7 @@ runBatch(startDate, endDate)
 └─────┬─────────────────┘
       │ 載入
 ┌─────▼────────────────┐
-│  config.js             │
+│  src/config.js         │
 │  讀取 .env, 提供       │
 │  config 配置           │
 └─────┬──────────────┘
@@ -69,6 +69,7 @@ runBatch(startDate, endDate)
 │  │ src/googleSheets. │  │
 │  │ src/utils.js      │  │
 │  │ src/logger.js     │  │
+│  │ src/config.js     │  │
 │  └──────────────────┘  │
 └───────────────────────┘
 ```
@@ -77,13 +78,13 @@ runBatch(startDate, endDate)
 
 | 項目 | 狀態 | 說明 |
 |------|------|------|
-| Yahoo Finance API 整合 | ✅ | 批次區間抓取 ^TWII, 2330.TW, TSM |
+| Yahoo Finance API 整合 | ✅ | 批次區間抓取 ^TWII, 2330.TW, TSM (緩衝 15 天) |
 | Exchange API 整合 | ✅ | 抓取 USD/TWD, 含備用 CDN |
 | TWSE API 整合 | ✅ | 大盤成交金額、外資買賣超、融資餘額 |
 | Google Sheets API 整合 | ✅ | Service Account, 批次寫入, 去重檢查 |
 | .env 環境變數 | ✅ | 機密資訊分離 |
-| config.js 配置管理 | ✅ | 使用 dotenv |
-| 隨機延遲 | ✅ | 6-15 秒模擬真人 |
+| config.js 配置管理 | ✅ | 使用 dotenv (已移至 src/) |
+| 隨機延遲 | ✅ | 模擬真人等待 |
 | 日誌記錄 | ✅ | winston 模組 |
 | async/await 風格 | ✅ | 現代化异步程式設計 |
 | TAIFEX API 整合 | ✅ | 批次區間抓取外資期貨多空單及計算增減 |
@@ -108,8 +109,8 @@ taiwan-stock-daily-collector/
 │   ├── fetchTaifex.js
 │   ├── googleSheets.js
 │   ├── utils.js
-│   └── logger.js
-├── config.js         # 環境變數配置載入器
+│   ├── logger.js
+│   └── config.js     # 環境變數配置載入器
 ├── package.json      # npm 套件描述檔
 ├── README.md         # 專案說明文件
 ├── docs/

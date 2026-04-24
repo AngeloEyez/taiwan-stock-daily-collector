@@ -14,25 +14,25 @@
 - **隨機延遲**模擬真人瀏覽速度，避免 IP 被封鎖
 - **日誌記錄**完整追蹤每次執行的狀態
 
-## 📋 目前抓取 10/15 欄
+## 📋 目前抓取 15/15 欄
 
-| Col | 欄位 | 狀態 | 來源 |
-|-----|------|------|------|
-| A | 日期 | ✅ | 程式計算 |
-| B | 星期 | ✅ | 程式計算 |
-| C | 台股指數 | ✅ | Yahoo Finance (^TWII) |
-| D | 漲跌 | ✅ | 程式計算 (price - prev_close) |
-| E | 漲跌% | ✅ | 程式計算 |
-| F | 成交金額 | ❌ | 需證交所 API (twse.com.tw) |
-| G | 外資買賣超 | ❌ | 需證交所 API (twse.com.tw) |
-| H | 外資多空單 | ❌ | 需證交所 API (twse.com.tw) |
-| I | 增減 | ❌ | 需證交所 API (twse.com.tw) |
-| J | 融資餘額 | ❌ | 需證交所 API (twse.com.tw) |
-| K | 增減 | ❌ | 需證交所 API (twse.com.tw) |
-| L | 台積電股價 | ✅ | Yahoo Finance (2330.TW) |
-| M | 台積電漲跌% | ✅ | 程式計算 |
-| N | ADR (USD) | ✅ | Yahoo Finance (TSM) |
-| O | 匯率 | ✅ | Exchange API (fawazahmed0) |
+| Col | 欄位名稱 | 單位 | 說明 | 來源 |
+|-----|----------|------|------|------|
+| A | 日期 | YYYY/MM/DD | 交易日日期 | 程式計算 |
+| B | 星期 | 一~日 | 星期幾 | 程式計算 |
+| C | 台股指數 | 點 | 加權指數收盤價 | Yahoo Finance (^TWII) |
+| D | 漲跌 | 點 | 指數漲跌點數 | 程式計算 |
+| E | 漲跌% | % | 指數漲跌幅 | 程式計算 |
+| F | 成交金額 | 億元 | 大盤成交總額 | 證交所 API (MI_INDEX) |
+| G | 外資買賣超 | 億元 | 外資買賣超合計 | 證交所 API (BFI82U) |
+| H | 外資多空單 | 口 | 外資期貨未平倉淨額 | 期交所 API |
+| I | 增減 | 口 | 期貨淨額單日增減 | 程式計算 |
+| J | 融資餘額 | 億元 | 市場融資餘額 | 證交所 API (MI_MARGN) |
+| K | 增減 | 億元 | 融資餘額單日增減 | 證交所 API |
+| L | 台積電股價 | 元 | 2330 收盤價 | Yahoo Finance (2330.TW) |
+| M | 台積電漲跌%| % | 台積電單日漲跌幅 | 程式計算 |
+| N | ADR (USD) | 美元 | 台積電 ADR 收盤價 | Yahoo Finance (TSM) |
+| O | 匯率 | TWD/USD | 美元兌台幣匯率 | Exchange API |
 
 ## 🚀 使用方式
 
@@ -125,7 +125,7 @@ crontab -e
 
 ```
 create 台灣股市每日抓取
-  prompt: 執行 taiwan-stock-daily-collector/index.js 抓取今日股市資料并寫入 Google Sheets
+  prompt: 執行 taiwan-stock-daily-collector/collect.js 抓取今日股市資料并寫入 Google Sheets
   schedule: 每天 18:00
 ```
 
@@ -136,13 +136,13 @@ collect.js (CLI 入口)
   │
   └── src/main.js (主程式流程)
         ├── src/fetchYahoo.js    → Yahoo Finance API (^TWII, 2330.TW, TSM)
+        ├── src/fetchTwse.js     → 證交所 API (成交量、外資、融資)
+        ├── src/fetchTaifex.js   → 期交所 API (外資期貨)
         ├── src/fetchExchange.js → Exchange API (USD/TWD)
         ├── src/googleSheets.js  → Google Sheets API (讀寫、排序)
-        ├── src/utils.js         → 日期工具、計算函式、fetchJson
-        └── src/logger.js        → Winston logger
-              │
-              ├── config.js      → 環境變數 (.env)
-              └── .env           → 機密設定 (不進入版本控制)
+        ├── src/utils.js         │
+        ├── src/logger.js        ├── src/config.js (環境變數)
+        └── src/config.js        └── .env (機密金鑰)
 ```
 
 ## 📁 專案結構
@@ -150,12 +150,13 @@ collect.js (CLI 入口)
 ```
 taiwan-stock-daily-collector/
 ├── collect.js            # ★ CLI 入口點
-├── config.js             # 環境變數載入器
-├── index.js              # 相容性保留檔 (已廢棄)
 ├── src/
+│   ├── config.js         # 環境變數載入器
 │   ├── logger.js         # Winston logger 設定
 │   ├── utils.js          # 共用工具函式 (日期、計算、fetch)
 │   ├── fetchYahoo.js     # Yahoo Finance API 抓取
+│   ├── fetchTwse.js      # 證交所 API 抓取
+│   ├── fetchTaifex.js    # 期交所 API 抓取
 │   ├── fetchExchange.js  # 匯率 API 抓取
 │   ├── googleSheets.js   # Google Sheets API 讀寫
 │   └── main.js           # 主程式 (CLI 解析、三種執行模式)
