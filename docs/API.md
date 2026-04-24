@@ -83,7 +83,7 @@ await service.spreadsheets.values.append({
 
 ### MI_INDEX - 每日收盤行情
 ```
-GET https://api.twse.com.tw/v1/exchangeReport/MI_INDEX?date=20260421&response=json
+GET https://www.twse.com.tw/rwd/zh/afterTrading/MI_INDEX?date=20260421&type=MS&response=json
 ```
 
 - **用途**: 取得成交金額、成交股數、成交筆數
@@ -95,7 +95,7 @@ GET https://api.twse.com.tw/v1/exchangeReport/MI_INDEX?date=20260421&response=js
 
 ### MI_MARGN - 融資融券餘額
 ```
-GET https://api.twse.com.tw/v1/exchangeReport/MI_MARGN?date=20260421&response=json
+GET https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date=20260421&selectType=MS&response=json
 ```
 
 - **用途**: 取得融資餘額、融券餘額
@@ -107,7 +107,7 @@ GET https://api.twse.com.tw/v1/exchangeReport/MI_MARGN?date=20260421&response=js
 
 ### BFI82U - 三大法人買賣金額
 ```
-GET https://api.twse.com.tw/v1/exchangeReport/BFI82U?date=20260421&response=json
+GET https://www.twse.com.tw/rwd/zh/fund/BFI82U?dayDate=20260421&type=day&response=json
 ```
 
 - **用途**: 取得三大法人買賣金額

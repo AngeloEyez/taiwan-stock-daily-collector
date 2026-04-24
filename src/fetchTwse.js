@@ -141,7 +141,7 @@ function parseNumber(str) {
  */
 async function getMarketVolume(dateStr) {
   const dateStrTwse = dateStr.replace(/\//g, '');
-  const url = `https://www.twse.com.tw/exchangeReport/MI_INDEX?response=json&date=${dateStrTwse}&type=MS`;
+  const url = `https://www.twse.com.tw/rwd/zh/afterTrading/MI_INDEX?response=json&date=${dateStrTwse}&type=MS`;
   const res = await fetchTwse(url);
   if (!res) return null;
 
@@ -169,7 +169,7 @@ async function getMarketVolume(dateStr) {
  */
 async function getMarginBalance(dateStr) {
   const dateStrTwse = dateStr.replace(/\//g, '');
-  const url = `https://www.twse.com.tw/exchangeReport/MI_MARGN?response=json&date=${dateStrTwse}&selectType=MS`;
+  const url = `https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?response=json&date=${dateStrTwse}&selectType=MS`;
   const res = await fetchTwse(url);
   if (!res) return null;
 
@@ -205,7 +205,7 @@ async function getMarginBalance(dateStr) {
 async function getForeignInvestment(dateStr) {
   const dateStrTwse = dateStr.replace(/\//g, '');
   // 使用官方常用的 date 參數
-  const url = `https://www.twse.com.tw/fund/BFI82U?response=json&date=${dateStrTwse}&type=day`;
+  const url = `https://www.twse.com.tw/rwd/zh/fund/BFI82U?response=json&dayDate=${dateStrTwse}&type=day`;
   const res = await fetchTwse(url);
   if (!res) return null;
 
@@ -285,7 +285,7 @@ async function fetchTwseBatch(tradingDays) {
 async function getStockPriceFromTwse(dateStr, stockNo) {
   const dateStrTwse = dateStr.replace(/\//g, '');
   // STOCK_DAY 會回傳該股票當月的所有資料
-  const url = `https://www.twse.com.tw/exchangeReport/STOCK_DAY?response=json&date=${dateStrTwse}&stockNo=${stockNo}`;
+  const url = `https://www.twse.com.tw/rwd/zh/afterTrading/STOCK_DAY?response=json&date=${dateStrTwse}&stockNo=${stockNo}`;
   const res = await fetchTwse(url);
   if (!res || !res.data) return null;
 
@@ -305,7 +305,7 @@ async function getStockPriceFromTwse(dateStr, stockNo) {
  */
 async function getIndexPriceFromTwse(dateStr) {
   const dateStrTwse = dateStr.replace(/\//g, '');
-  const url = `https://www.twse.com.tw/exchangeReport/MI_INDEX?response=json&date=${dateStrTwse}&type=IND`;
+  const url = `https://www.twse.com.tw/rwd/zh/afterTrading/MI_INDEX?response=json&date=${dateStrTwse}&type=IND`;
   const res = await fetchTwse(url);
   if (!res) return null;
 
