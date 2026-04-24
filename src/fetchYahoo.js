@@ -31,8 +31,8 @@ async function yahooGetHistoricalBatch(ticker, startDate, endDate) {
     const startDateObj = dateStrToDate(startDate);
     const endDateObj = dateStrToDate(endDate);
 
-    // 往前多取 3 天，確保 startDate 當天有 prev_close 可計算漲跌
-    const period1 = new Date(startDateObj.getTime() - 3 * 86400000);
+    // 往前多取 15 天，確保 startDate 當天有 prev_close 可計算漲跌
+    const period1 = new Date(startDateObj.getTime() - 15 * 86400000);
     // 往後多取 1 天，確保 endDate 本身包含在查詢範圍內
     const period2 = new Date(endDateObj.getTime() + 86400000);
 
