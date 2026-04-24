@@ -5,7 +5,7 @@
  * TWSE API 每個端點均只接受單一日期參數，不支援區間查詢。
  * 批次模式透過 fetchTwseBatch 逐日呼叫，統一管理三個 API 的呼叫順序與等待。
  */
-const { fetchJson, waitRandom } = require('./utils');
+const { fetchJson, waitRandom, toTwDate } = require('./utils');
 const config = require('./config');
 const logger = require('./logger');
 
@@ -275,9 +275,55 @@ async function fetchTwseBatch(tradingDays) {
   return resultMap;
 }
 
+/**
+ * 從 TWSE 取得特定個股在特定日期的收盤價 (備援用)
+ * 
+ * @param {string} dateStr - YYYY/MM/DD
+ * @param {string} stockNo - 證券代號 (e.g. 2330)
+ * @returns {Promise<number|null>}
+ */
+async function getStockPriceFromTwse(dateStr, stockNo) {
+  const dateStrTwse = dateStr.replace(/\//g, '');
+  // STOCK_DAY 會回傳該股票當月的所有資料
+  const url = `https://www.twse.com.tw/exchangeReport/STOCK_DAY?response=json&date=${dateStrTwse}&stockNo=${stockNo}`;
+  const res = await fetchTwse(url);
+  if (!res || !res.data) return null;
+
+  const twDate = toTwDate(dateStr);
+  const row = res.data.find(r => r[0] === twDate);
+  if (!row) return null;
+
+  // 收盤價在第 7 欄 (索引 6)
+  return parseNumber(row[6]);
+}
+
+/**
+ * 從 TWSE 取得加權指數在特定日期的收盤價 (備援用)
+ * 
+ * @param {string} dateStr - YYYY/MM/DD
+ * @returns {Promise<number|null>}
+ */
+async function getIndexPriceFromTwse(dateStr) {
+  const dateStrTwse = dateStr.replace(/\//g, '');
+  const url = `https://www.twse.com.tw/exchangeReport/MI_INDEX?response=json&date=${dateStrTwse}&type=IND`;
+  const res = await fetchTwse(url);
+  if (!res) return null;
+
+  const table = findTable(res, '價格指數');
+  if (!table) return null;
+
+  const row = table.data.find(r => r[0].includes('發行量加權股價指數'));
+  if (!row) return null;
+
+  // 收盤指數在第 2 欄 (索引 1)
+  return parseNumber(row[1]);
+}
+
 module.exports = {
   getMarketVolume,
   getMarginBalance,
   getForeignInvestment,
   fetchTwseBatch,
+  getStockPriceFromTwse,
+  getIndexPriceFromTwse,
 };

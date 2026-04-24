@@ -24,7 +24,7 @@ const {
   sortSheetsByDate,
   deleteRowsByDateRange,
 } = require('./googleSheets');
-const { fetchTwseBatch } = require('./fetchTwse');
+const { fetchTwseBatch, getStockPriceFromTwse, getIndexPriceFromTwse } = require('./fetchTwse');
 const { getForeignFuturesBatch } = require('./fetchTaifex');
 const {
   getTodayStr,
@@ -131,14 +131,37 @@ async function fetchAllDataBatch(tradingDays, startDate, endDate) {
   const adrMap = await yahooGetHistoricalBatch('TSM', startDate, endDate);
   await waitRandom();
 
-  // 合併三個 Yahoo ticker 的 Map 為單一 yahooMap
+  // 合併三個 Yahoo ticker 的 Map 為單一 yahooMap，同時進行備援檢查
   const yahooMap = new Map();
   for (const dateStr of tradingDays) {
-    yahooMap.set(dateStr, {
-      twii: twiiMap.get(dateStr) || null,
-      tsmc: tsmcMap.get(dateStr) || null,
-      adr: adrMap.get(dateStr) || null,
-    });
+    let twii = twiiMap.get(dateStr) || null;
+    let tsmc = tsmcMap.get(dateStr) || null;
+    let adr = adrMap.get(dateStr) || null;
+
+    // ── 備援機制：若 Yahoo 價格為 null，嘗試從 TWSE 補抓 ──
+    if (twii && twii.price === null) {
+      logger.info(`    ! Yahoo [^TWII] 在 ${dateStr} 價格為 null，嘗試從 TWSE 補抓...`);
+      const twseIndex = await getIndexPriceFromTwse(dateStr);
+      if (twseIndex !== null) {
+        twii.price = twseIndex;
+        twii.close = twseIndex;
+        logger.info(`    ✅ 已補足 [^TWII] (${dateStr}) 價格: ${twseIndex}`);
+        await waitRandom(); // 補抓後也等待一下
+      }
+    }
+
+    if (tsmc && tsmc.price === null) {
+      logger.info(`    ! Yahoo [2330.TW] 在 ${dateStr} 價格為 null，嘗試從 TWSE 補抓...`);
+      const twsePrice = await getStockPriceFromTwse(dateStr, '2330');
+      if (twsePrice !== null) {
+        tsmc.price = twsePrice;
+        tsmc.close = twsePrice;
+        logger.info(`    ✅ 已補足 [2330.TW] (${dateStr}) 價格: ${twsePrice}`);
+        await waitRandom();
+      }
+    }
+
+    yahooMap.set(dateStr, { twii, tsmc, adr });
   }
 
   // ── 2. USD/TWD 匯率 (逐日，無原生區間支援) ────────────────────────────────

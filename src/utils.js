@@ -40,6 +40,19 @@ function dateToStr(date) {
 }
 
 /**
+ * 將西元日期字串 (YYYY/MM/DD) 轉換為民國日期字串 (YYY/MM/DD)
+ * 例如: 2025/08/01 -> 114/08/01
+ * 
+ * @param {string} dateStr 
+ * @returns {string}
+ */
+function toTwDate(dateStr) {
+  const [y, m, d] = dateStr.split('/');
+  const twYear = parseInt(y, 10) - 1911;
+  return `${twYear}/${m}/${d}`;
+}
+
+/**
  * 判斷是否為週末
  */
 function isWeekend(date) {
@@ -164,4 +177,5 @@ module.exports = {
   calculateChange,
   calculatePct,
   fetchJson,
+  toTwDate,
 };
