@@ -192,9 +192,9 @@ function combineRow(dateStr, yahooData, fxRate, twseData, taifexData) {
   if (!hasTsmc)  logger.warn(`  ! ${dateStr} 台積電股價抓取失敗`);
   if (!hasAdr)   logger.warn(`  ! ${dateStr} ADR 抓取失敗`);
   if (fxRate == null) logger.warn(`  ! ${dateStr} 匯率抓取失敗`);
-  if (!twseData?.volume)  logger.warn(`  ! ${dateStr} 大盤成交金額抓取失敗`);
-  if (!twseData?.foreign) logger.warn(`  ! ${dateStr} 外資買賣超抓取失敗`);
-  if (!twseData?.margin)  logger.warn(`  ! ${dateStr} 融資餘額抓取失敗`);
+  if (twseData?.volume == null)  logger.warn(`  ! ${dateStr} 大盤成交金額抓取失敗`);
+  if (twseData?.foreign == null) logger.warn(`  ! ${dateStr} 外資買賣超抓取失敗`);
+  if (twseData?.margin == null)  logger.warn(`  ! ${dateStr} 融資餘額抓取失敗`);
   if (!taifexData) logger.warn(`  ! ${dateStr} 期交所外資多空單抓取失敗`);
 
   const taiexPrice = hasMarket ? twii.price : null;

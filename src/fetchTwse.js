@@ -10,21 +10,54 @@ const config = require('../config');
 const logger = require('./logger');
 
 /**
- * 通用 TWSE 請求，含防呆與超時設定
+ * 通用 TWSE 請求，含重試機制、標頭模擬與超時設定
  *
  * @param {string} url
+ * @param {number} retries - 剩餘重試次數
  * @returns {Promise<Object|null>}
  */
-async function fetchTwse(url) {
+async function fetchTwse(url, retries = 3) {
+  const headers = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'Referer': 'https://www.twse.com.tw/zh/trading/fund/bfi82u.html',
+    'Accept': 'application/json, text/javascript, */*; q=0.01',
+    'X-Requested-With': 'XMLHttpRequest',
+  };
+
   try {
-    // 證交所 API 有時會比較慢，這裡給較長的 timeout
-    const data = await fetchJson(url, config.EXCHANGE_TIMEOUT * 2000 || 15000);
+    const timeout = config.EXCHANGE_TIMEOUT * 1000 || 15000;
+    const response = await fetch(url, { headers, signal: AbortSignal.timeout(timeout) });
+    
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+
+    const text = await response.text();
+    
+    // 檢查是否回傳了 HTML (可能是被阻擋或重導向)
+    if (text.trim().startsWith('<!DOCTYPE') || text.includes('<html')) {
+      throw new Error('回傳了 HTML 而非 JSON (可能被阻擋)');
+    }
+
+    const data = JSON.parse(text);
+
     if (data && data.stat === 'OK') {
       return data;
+    } else if (data && data.stat) {
+      // 記錄具體的業務錯誤訊息 (例如：沒有符合條件的資料)
+      logger.debug(`  TWSE 狀態提示: ${data.stat} (${url.split('/').pop()})`);
+      return null;
     }
     return null;
+
   } catch (e) {
-    logger.warn(`  ! TWSE API 失敗: ${e.message}`);
+    if (retries > 0) {
+      const waitTime = (4 - retries) * 2000; // 逐漸增加等待時間
+      logger.warn(`  ! TWSE 請求失敗 (${e.message})，${waitTime/1000} 秒後進行第 ${4-retries} 次重試...`);
+      await new Promise(resolve => setTimeout(resolve, waitTime));
+      return fetchTwse(url, retries - 1);
+    }
+    logger.warn(`  ! TWSE API 最終失敗: ${e.message}`);
     return null;
   }
 }
@@ -77,7 +110,12 @@ function findTable(data, keyword) {
 
   // 備用: 如果只有單一 fields / data
   if (data.fields && data.data) {
-    return { fields: data.fields, data: data.data };
+    // 也要檢查是否包含 keyword (或者至少檢查是否符合三大法人的結構)
+    const hasKeyword = data.fields.some(f => f.includes(keyword)) ||
+                       data.data.some(row => row[0] && row[0].includes(keyword));
+    if (hasKeyword) {
+      return { fields: data.fields, data: data.data };
+    }
   }
 
   return null;
@@ -159,28 +197,45 @@ async function getMarginBalance(dateStr) {
 }
 
 /**
- * 3. 取得外資買賣超金額 (億)
+ * 3. 取得三大法人買賣超 (主要抓取外資)
  *
  * @param {string} dateStr - YYYY/MM/DD
- * @returns {Promise<string|null>} 買賣超金額 (億)，失敗回傳 null
+ * @returns {Promise<number|null>} 單位：億 (數字)
  */
 async function getForeignInvestment(dateStr) {
   const dateStrTwse = dateStr.replace(/\//g, '');
-  const url = `https://www.twse.com.tw/fund/BFI82U?response=json&dayDate=${dateStrTwse}&type=day`;
+  // 使用官方常用的 date 參數
+  const url = `https://www.twse.com.tw/fund/BFI82U?response=json&date=${dateStrTwse}&type=day`;
   const res = await fetchTwse(url);
   if (!res) return null;
 
   const table = findTable(res, '外資');
   if (!table) return null;
 
-  const targetRow = table.data.find(r => r[0].includes('外資及陸資'));
-  if (!targetRow) return null;
-
+  // 取得「買賣差額」欄位索引
   const diffIdx = table.fields.findIndex(f => f.includes('買賣差額'));
   if (diffIdx === -1) return null;
 
-  const val = parseNumber(targetRow[diffIdx]);
-  return Math.round((val / 100000000) * 100) / 100; // 轉為億元 (數字)
+  /**
+   * 三大法人資料中，外資通常分為兩列：
+   * 1. 外資及陸資(不含外資自營商)
+   * 2. 外資自營商
+   * 一般大眾口中的「外資買賣超」通常是這兩者的總和。
+   */
+  let totalVal = 0;
+  let found = false;
+
+  table.data.forEach(row => {
+    const name = row[0];
+    if (name && (name.includes('外資及陸資') || name.includes('外資自營商'))) {
+      totalVal += parseNumber(row[diffIdx]);
+      found = true;
+    }
+  });
+
+  if (!found) return null;
+
+  return Math.round((totalVal / 100000000) * 100) / 100; // 轉為億元 (數字)
 }
 
 /**
