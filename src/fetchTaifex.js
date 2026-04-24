@@ -24,7 +24,19 @@ async function getForeignFuturesBatch(startDate, endDate) {
     const startDateObj = dateStrToDate(startDate);
     const extendedStart = new Date(startDateObj.getTime() - 15 * 86400000);
     const queryStartDate = dateToStr(extendedStart);
-    const queryEndDate = endDate;
+    
+    // 如果結束日期是今天且尚未到 15:00 (資料更新時間)，則查詢日期上限設為昨天，避免期交所報錯
+    let queryEndDate = endDate;
+    const todayStr = require('./utils').getTodayStr();
+    if (endDate === todayStr) {
+        const now = new Date();
+        const taipeiHour = (now.getUTCHours() + 8) % 24;
+        if (taipeiHour < 15) {
+            const yesterday = new Date(now.getTime() - 86400000);
+            queryEndDate = dateToStr(yesterday);
+            logger.info(`  [備註] 今日資料尚未更新，查詢區間調整為至 ${queryEndDate}`);
+        }
+    }
 
     logger.info(`  抓取期交所外資多空單 (${startDate} ~ ${endDate})...`);
 
@@ -32,7 +44,7 @@ async function getForeignFuturesBatch(startDate, endDate) {
     const formData = new URLSearchParams();
     formData.append('queryStartDate', queryStartDate);
     formData.append('queryEndDate', queryEndDate);
-    formData.append('commodityId', ''); // 空值代表全部商品
+    formData.append('commodityId', 'TXF');
 
     const response = await fetch(url, {
       method: 'POST',
@@ -40,6 +52,7 @@ async function getForeignFuturesBatch(startDate, endDate) {
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
         'User-Agent': 'Mozilla/5.0',
+        'Referer': 'https://www.taifex.com.tw/cht/3/futContractsDateView',
       },
     });
 
@@ -52,8 +65,14 @@ async function getForeignFuturesBatch(startDate, endDate) {
     const decoder = new TextDecoder('big5');
     const csvText = decoder.decode(buffer);
 
+    if (csvText.includes('<!DOCTYPE HTML')) {
+      logger.warn('  ! TAIFEX 回傳了 HTML 錯誤頁面，可能是被擋或參數錯誤');
+      return resultMap;
+    }
+
     // 解析 CSV，篩選出 臺股期貨 及 外資及陸資 的資料
-    const lines = csvText.split('\n').filter(line => line.trim() !== '');
+    const lines = csvText.split(/\r?\n/).filter(line => line.trim() !== '');
+    logger.debug(`  TAIFEX CSV 取得 ${lines.length} 行資料`);
 
     // 原始記錄清單 (包含延伸查詢的前幾天)
     const allRecords = [];
@@ -61,14 +80,15 @@ async function getForeignFuturesBatch(startDate, endDate) {
     // 從第一行 (非標題行) 開始處理
     for (let i = 1; i < lines.length; i++) {
       const columns = lines[i].split(',');
-      if (columns.length < 15) continue;
+      if (columns.length < 14) continue;
 
-      const rowDate = columns[0].trim();
-      const commodity = columns[1].trim();
-      const identity = columns[2].trim();
+      // 移除可能的雙引號與前後空白
+      const rowDate = columns[0].replace(/"/g, '').trim();
+      const commodity = columns[1].replace(/"/g, '').trim();
+      const identity = columns[2].replace(/"/g, '').trim();
 
       if (commodity === '臺股期貨' && identity === '外資及陸資') {
-        const netOpenInterest = parseInt(columns[13].trim(), 10);
+        const netOpenInterest = parseInt(columns[13].replace(/"/g, '').trim(), 10);
         if (!isNaN(netOpenInterest)) {
           allRecords.push({ date: rowDate, netOpenInterest });
         }
