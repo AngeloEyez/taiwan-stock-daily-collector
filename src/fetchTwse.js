@@ -6,7 +6,7 @@
  * 批次模式透過 fetchTwseBatch 逐日呼叫，統一管理三個 API 的呼叫順序與等待。
  */
 const { fetchJson, waitRandom } = require('./utils');
-const config = require('../config');
+const config = require('./config');
 const logger = require('./logger');
 
 /**

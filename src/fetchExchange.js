@@ -6,7 +6,7 @@
  * 因此批次模式仍需逐日呼叫，但統一透過 getFxRateBatch 管理。
  */
 const { fetchJson, waitRandom } = require('./utils');
-const config = require('../config');
+const config = require('./config');
 const logger = require('./logger');
 
 /**

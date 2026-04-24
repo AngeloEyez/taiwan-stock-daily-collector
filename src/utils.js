@@ -3,7 +3,7 @@
  * utils.js - 共用工具函式
  * 包含日期處理、HTTP fetch、計算函式等。
  */
-const config = require('../config');
+const config = require('./config');
 const logger = require('./logger');
 
 /**
