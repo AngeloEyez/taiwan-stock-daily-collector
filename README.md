@@ -59,6 +59,8 @@ node collect.js --date 2026/04/14
 node collect.js --start 2026/04/01 --end 2026/04/22
 ```
 
+> 注意：若起始日晚於結束日，程式會自動交換日期順序。
+
 ### 3. 自動補齊模式
 
 檢查試算表中現有的日期紀錄，自動補齊遺漏的交易日資料。
@@ -66,6 +68,16 @@ node collect.js --start 2026/04/01 --end 2026/04/22
 ```bash
 node collect.js --fill
 ```
+
+### CLI 參數說明
+
+| 參數 | 格式 | 模式 | 說明 |
+|-----|------|------|------|
+| (無) | - | 單日模式 | 抓取今日及前 3 個交易日 |
+| `--date` | `YYYY/MM/DD` | 單日模式 | 抓取指定日期資料 |
+| `--start` | `YYYY/MM/DD` | 批次模式 | 批次抓取起始日 |
+| `--end` | `YYYY/MM/DD` | 批次模式 | 批次抓取結束日 |
+| `--fill` | - | 補齊模式 | 自動補齊試算表遺漏資料 |
 
 
 ---
@@ -119,14 +131,6 @@ crontab -e
 ```bash
 # 每天下午 18:00 執行 (收盤後)
 0 18 * * 0-6 /usr/bin/node /path/to/taiwan-stock-daily-collector/collect.js >> /var/log/stock_collector.log 2>&1
-```
-
-### 方式二: Hermes Agent cron job
-
-```
-create 台灣股市每日抓取
-  prompt: 執行 taiwan-stock-daily-collector/collect.js 抓取今日股市資料并寫入 Google Sheets
-  schedule: 每天 18:00
 ```
 
 ## 🏗️ 架構圖

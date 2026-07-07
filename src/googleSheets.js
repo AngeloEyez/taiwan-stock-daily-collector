@@ -37,6 +37,7 @@ async function getGoogleCredentials() {
 
 /**
  * 讀取試算表中所有日期列 (Column A)
+ * 最新日期在最前面 (從 row 2 開始)
  *
  * @returns {Promise<string[]>}
  */
@@ -49,11 +50,13 @@ async function getAllDatesInSheets() {
     valueRenderOption: 'UNFORMATTED_VALUE',
   });
   const values = resp.data.values || [];
-  return values.map(row => (row[0] || '').trim()).filter(v => v !== '');
+  // 跳過 header (row 1)，只取資料行
+  return values.slice(1).map(row => (row[0] || '').trim()).filter(v => v !== '');
 }
 
 /**
  * 刪除指定日期區間內的資料行
+ * 注意：rowIndex 從 1 開始 (row 0 是 header)
  *
  * @param {string} startDate - 起始日期 (YYYY/MM/DD)
  * @param {string} endDate   - 結束日期 (YYYY/MM/DD)
@@ -64,7 +67,7 @@ async function deleteRowsByDateRange(startDate, endDate) {
   const { client, google } = await getGoogleCredentials();
   const service = google.sheets({ version: 'v4', auth: client });
 
-  // 取得所有日期
+  // 取得所有日期 (包含 header)
   const resp = await service.spreadsheets.values.get({
     spreadsheetId: config.SPREADSHEET_ID,
     range: `${config.SHEET_NAME}!A:A`,
@@ -73,10 +76,10 @@ async function deleteRowsByDateRange(startDate, endDate) {
   const values = resp.data.values || [];
   const rowsToDelete = [];
 
-  // 找出落在區間內的行號 (0-indexed)
-  for (let i = 0; i < values.length; i++) {
+  // 找出落在區間內的行號 (0-indexed，但從 row 1 開始是資料)
+  for (let i = 1; i < values.length; i++) {
     const dateStr = (values[i][0] || '').trim();
-    if (!dateStr || dateStr === '日期') continue; // 跳過標題或空行
+    if (!dateStr) continue; // 跳過空行
 
     if (dateStr >= startDate && dateStr <= endDate) {
       rowsToDelete.push(i);
@@ -117,7 +120,7 @@ async function deleteRowsByDateRange(startDate, endDate) {
 }
 
 /**
- * 批次寫入多列資料至試算表
+ * 批次寫入多列資料至試算表 (插入到 row 2，header 下方)
  *
  * @param {Array[]} rows - 資料陣列的陣列
  */
@@ -127,19 +130,45 @@ async function batchAppendToSheets(rows) {
     return;
   }
 
-  logger.info(`📝 正在批次寫入 ${rows.length} 筆資料至試算表...`);
+  logger.info(`📝 正在插入 ${rows.length} 筆資料至試算表 (row 2 起)...`);
 
   const { client, google } = await getGoogleCredentials();
   const service = google.sheets({ version: 'v4', auth: client });
 
-  await service.spreadsheets.values.append({
+  // 取得工作表資訊
+  const ss = await service.spreadsheets.get({ spreadsheetId: config.SPREADSHEET_ID });
+  const sheet = ss.data.sheets.find(s => s.properties.title === config.SHEET_NAME);
+  const sheetId = sheet.properties.sheetId;
+
+  // 先插入空行 (從 row 2 開始，插入 rows.length 行)
+  await service.spreadsheets.batchUpdate({
     spreadsheetId: config.SPREADSHEET_ID,
-    range: config.SHEET_NAME,
+    requestBody: {
+      requests: [
+        {
+          insertDimension: {
+            range: {
+              sheetId,
+              dimension: 'ROWS',
+              startIndex: 1,
+              endIndex: 1 + rows.length,
+            },
+            inheritFromBefore: false,
+          },
+        },
+      ],
+    },
+  });
+
+  // 再寫入資料到 row 2 開始的位置
+  await service.spreadsheets.values.update({
+    spreadsheetId: config.SPREADSHEET_ID,
+    range: `${config.SHEET_NAME}!A2`,
     valueInputOption: 'USER_ENTERED',
     requestBody: { values: rows },
   });
 
-  logger.info(`  ✅ 批次寫入完成！共 ${rows.length} 筆`);
+  logger.info(`  ✅ 批次插入完成！共 ${rows.length} 筆`);
 }
 
 /**
@@ -167,7 +196,7 @@ async function appendToSheets(rowData) {
 }
 
 /**
- * 依日期欄位對工作表排序 (升冪)
+ * 依日期欄位對工作表排序 (降冪 - 最新日期在最前面)
  */
 async function sortSheetsByDate() {
   const { client, google } = await getGoogleCredentials();
@@ -183,13 +212,13 @@ async function sortSheetsByDate() {
         {
           sortRange: {
             range: { sheetId, startRowIndex: 1 },
-            sortSpecs: [{ dimensionIndex: 0, sortOrder: 'ASCENDING' }],
+            sortSpecs: [{ dimensionIndex: 0, sortOrder: 'DESCENDING' }],
           },
         },
       ],
     },
   });
-  logger.info('✨ 試算表排序完成');
+  logger.info('✨ 試算表排序完成 (最新日期在前)');
 }
 
 module.exports = {
